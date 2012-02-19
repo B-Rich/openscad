@@ -241,9 +241,30 @@ Value builtin_atan2(const Context *, const std::vector<std::string>&, const std:
 
 Value builtin_pow(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
 {
-	if (args.size() == 2 && args[0].type == Value::NUMBER && args[1].type == Value::NUMBER)
-		return Value(pow(args[0].num, args[1].num));
-	return Value();
+    if (args.size() == 2 && args[0].type == Value::NUMBER && args[1].type == Value::NUMBER) {
+        return Value(pow(args[0].num, args[1].num));
+    } else if (args.size() == 2 && args[0].type == Value::VECTOR && args[1].type == Value::NUMBER && args[1].num >= 0 ) {
+        unsigned int matrixDim=args[0].vec.size();
+        Value returnVector;
+        returnVector.type = Value::VECTOR;
+        if( args[0].vec.size() != matrixDim ) return Value();
+        for ( unsigned int i=0; i<matrixDim; i++ ) {
+            if( args[0].vec[i]->vec.size() != matrixDim ) return Value();
+            Value *resultVector = new Value();
+            resultVector->type = Value::VECTOR;
+            for ( unsigned int j=0; j<matrixDim; j++ ) {
+                Value *resultValue = new Value(double(0));
+                if(i==j) resultValue->num=1.0;
+                resultVector->append(resultValue);
+            }
+            returnVector.append(resultVector);
+        }
+        for ( unsigned int i=1; i<=args[1].num; i++ ) {
+            returnVector = returnVector * args[0];
+        }
+        return returnVector;
+    }
+    return Value();
 }
 
 Value builtin_round(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
@@ -484,6 +505,26 @@ Value builtin_search(const Context *, const std::vector<std::string>&, const std
 	return returnVector;
 }
 
+Value builtin_identity(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
+{
+    if (args.size() == 1 && args[0].type == Value::NUMBER && args[0].num >= 0 ) {
+            Value returnVector;
+            returnVector.type = Value::VECTOR;
+            for ( unsigned int i=0; i<args[0].num; i++ ) {
+            Value *resultVector = new Value();
+            resultVector->type = Value::VECTOR;
+            for ( unsigned int j=0; j<args[0].num; j++ ) {
+                Value *resultValue = new Value(double(0));
+                if(i==j) resultValue->num=1.0;
+                resultVector->append(resultValue);
+            }
+            returnVector.append(resultVector);
+            }
+            return returnVector;
+        }
+    return Value();
+}
+
 #define QUOTE(x__) # x__
 #define QUOTED(x__) QUOTE(x__)
 
@@ -537,6 +578,7 @@ void register_builtin_functions()
 	Builtins::init("str", new BuiltinFunction(&builtin_str));
 	Builtins::init("lookup", new BuiltinFunction(&builtin_lookup));
 	Builtins::init("search", new BuiltinFunction(&builtin_search));
-	Builtins::init("version", new BuiltinFunction(&builtin_version));
+        Builtins::init("identity", new BuiltinFunction(&builtin_identity));
+        Builtins::init("version", new BuiltinFunction(&builtin_version));
 	Builtins::init("version_num", new BuiltinFunction(&builtin_version_num));
 }
