@@ -64,6 +64,13 @@ Value::Value(const std::string &t)
 	this->text = t;
 }
 
+Value::Value(const Eigen::MatrixXd &m)
+{
+    reset_undef();
+    this->type = MATRIX;
+    this->matrix = m;
+}
+
 Value::Value(const Value &v)
 {
 	*this = v;
@@ -392,7 +399,8 @@ void Value::reset_undef()
 	this->range_begin = 0;
 	this->range_step = 0;
 	this->range_end = 0;
-	this->text = "";
+        this->text = "";
+        this->matrix.setZero(1,1);
 }
 
 std::string Value::toString() const
