@@ -34,6 +34,7 @@
 #include <algorithm>
 #include "stl-utils.h"
 #include "printutils.h"
+#include <Eigen/Core>
 
 AbstractFunction::~AbstractFunction()
 {
@@ -508,17 +509,20 @@ Value builtin_search(const Context *, const std::vector<std::string>&, const std
 Value builtin_identity(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
 {
     if (args.size() == 1 && args[0].type == Value::NUMBER && args[0].num >= 0 ) {
+            unsigned int matrix_dim=(unsigned int) args[0].num;
+            Eigen::MatrixXd idMatrix(2,2);
+            idMatrix.resize(matrix_dim,matrix_dim);
+            idMatrix.setIdentity(matrix_dim,matrix_dim);
             Value returnVector;
             returnVector.type = Value::VECTOR;
             for ( unsigned int i=0; i<args[0].num; i++ ) {
-            Value *resultVector = new Value();
-            resultVector->type = Value::VECTOR;
-            for ( unsigned int j=0; j<args[0].num; j++ ) {
-                Value *resultValue = new Value(double(0));
-                if(i==j) resultValue->num=1.0;
-                resultVector->append(resultValue);
-            }
-            returnVector.append(resultVector);
+                Value *resultVector = new Value();
+                resultVector->type = Value::VECTOR;
+                for ( unsigned int j=0; j<args[0].num; j++ ) {
+                    Value *resultValue = new Value(idMatrix(i,j));
+                    resultVector->append(resultValue);
+                }
+                returnVector.append(resultVector);
             }
             return returnVector;
         }
