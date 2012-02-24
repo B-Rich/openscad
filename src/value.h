@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <string>
-#include <Eigen/Core>
 
 class QuotedString : public std::string
 {
@@ -25,13 +24,12 @@ class Value
 {
 public:
 	enum type_e {
-          UNDEFINED,
-          BOOL,
-          NUMBER,
-          RANGE,
-          VECTOR,
-          STRING,
-          MATRIX
+		UNDEFINED,
+		BOOL,
+		NUMBER,
+		RANGE,
+		VECTOR,
+		STRING
 	};
 
 	enum type_e type;
@@ -42,16 +40,14 @@ public:
 	double range_begin;
 	double range_step;
 	double range_end;
-        std::string text;
-        Eigen::MatrixXd matrix;
+	std::string text;
 
 	Value();
 	~Value();
 
 	Value(bool v);
 	Value(double v);
-        Value(const std::string &t);
-        Value(const Eigen::MatrixXd &m);
+	Value(const std::string &t);
 
 	Value(const Value &v);
 	Value& operator = (const Value &v);
