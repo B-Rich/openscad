@@ -77,12 +77,11 @@ private:
 	AbstractNode *find_root_tag(AbstractNode *n);
 	void updateTemporalVariables();
 	bool fileChangedOnDisk();
-	bool includesChanged();
 	bool compileTopLevelDocument(bool reload);
 	bool compile(bool reload, bool procevents);
 	void compileCSG(bool procevents);
 	bool maybeSave();
-	bool checkEditorModified();
+	bool checkModified();
 	QString dumpCSGTree(AbstractNode *root);
 	static void consoleOutput(const std::string &msg, void *userdata);
 	void loadViewSettings();
