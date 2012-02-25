@@ -928,7 +928,7 @@ void MainWindow::actionSaveAs()
 
 void MainWindow::actionReload()
 {
-	if (checkModified()) refreshDocument();
+	if (checkEditorModified()) refreshDocument();
 }
 
 void MainWindow::hideEditor()
@@ -1033,7 +1033,9 @@ bool MainWindow::compileTopLevelDocument(bool reload)
 {
 	bool shouldcompiletoplevel = !reload;
 
-	if (reload && fileChangedOnDisk() && checkModified()) {
+	if (reload &&
+             (fileChangedOnDisk() && checkEditorModified()) ||
+	     includesChanged()) {
 		shouldcompiletoplevel = true;
 		refreshDocument();
 	}
@@ -1102,7 +1104,7 @@ void MainWindow::autoReloadSet(bool on)
 	}
 }
 
-bool MainWindow::checkModified()
+bool MainWindow::checkEditorModified()
 {
 	if (editor->isContentModified()) {
 		QMessageBox::StandardButton ret;
