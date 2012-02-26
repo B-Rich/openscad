@@ -41,6 +41,10 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/assign/std/vector.hpp>
+#include <Magick++.h>
+
+using namespace std;
+using namespace Magick;
 using namespace boost::assign; // bring 'operator+=()' into scope
 
 class SurfaceModule : public AbstractModule
@@ -96,7 +100,39 @@ AbstractNode *SurfaceModule::evaluate(const Context *ctx, const ModuleInstantiat
 
 PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
 {
-	handle_dep(filename);
+    handle_dep(filename);
+    bool isImage;
+    Image image;
+    // image.magick("PNG");
+    try {
+        image.read( filename );
+        PRINTB("surface: loaded image '%s'",filename );
+        isImage=true;
+    } catch( Exception &error_ ) {
+        PRINTB("surface: %s",error_.what() );
+        isImage=false;
+    }
+    PolySet *p = new PolySet();
+    int lines = 0, columns = 0;
+    boost::unordered_map<std::pair<int,int>,double> data;
+    double min_val = 0;
+    if(isImage) {
+        PRINTB("surface: image '%s'; not supported yet.",filename);
+        lines = image.baseRows();
+        PRINTB("       : lines = %d",lines);
+        columns = image.baseColumns();
+        PRINTB("       : columns = %d",columns);
+        ColorGray thisPixel;
+        for( int ix =0; ix<columns; ix++) {
+            for( int jy=0;jy<lines;jy++) {
+                thisPixel=image.pixelColor(ix,jy);
+                double v=thisPixel.shade();
+                data[std::make_pair(lines-jy-1,ix)]=v;
+                min_val = std::min(v-1, min_val);
+            }
+        }
+        // return NULL;
+    } else {
 	std::ifstream stream(filename.c_str());
 
 	if (!stream.good()) {
@@ -104,10 +140,6 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
 		return NULL;
 	}
 
-	PolySet *p = new PolySet();
-	int lines = 0, columns = 0;
-	boost::unordered_map<std::pair<int,int>,double> data;
-	double min_val = 0;
 
 	typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
 	boost::char_separator<char> sep(" \t");
@@ -135,10 +167,10 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
 				PRINTB("WARNING: Illegal value in '%s': %s", filename % blc.what());
 			}
 			break;
-  	}
-
-		lines++;
-	}
+            }
+            lines++;
+        }
+    }
 
 	p->convexity = convexity;
 

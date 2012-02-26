@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by Qt Creator 2.4.1, 2012-02-15T15:03:04. -->
+<!-- Written by Qt Creator 2.4.1, 2012-02-26T18:21:26. -->
 <qtcreator>
  <data>
   <variable>ProjectExplorer.Project.ActiveTarget</variable>
@@ -101,6 +101,7 @@
      <value type="QString">PATH=/opt/local/libexec/ccache:/usr/bin:$QTDIR/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin</value>
      <value type="QString">CCACHE_BASEDIR=$$PWD/..</value>
      <value type="QString">EIGEN2DIR=$$PWD/../libraries/install/include/eigen2</value>
+     <value type="QString">IMAGEMAGICK_INCLUDEPATH=/opt/local/include/ImageMagick</value>
     </valuelist>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DefaultDisplayName">Qt 4.8.0 (gcc) Debug</value>
     <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName"></value>

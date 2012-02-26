@@ -6,6 +6,7 @@
 #   EIGEN2DIR
 #   GLEWDIR
 #   OPENCSGDIR
+#   IMAGEMAGICKDIR
 #   OPENSCAD_LIBRARIES
 #
 # Please see the 'Buildling' sections of the OpenSCAD user manual 
@@ -110,6 +111,7 @@ CONFIG += cgal
 CONFIG += opencsg
 CONFIG += boost
 CONFIG += eigen2
+CONFIG += imagemagick
 
 #Uncomment the following line to enable QCodeEdit
 #CONFIG += qcodeedit
