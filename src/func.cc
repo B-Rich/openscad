@@ -246,13 +246,12 @@ Value builtin_pow(const Context *, const std::vector<std::string>&, const std::v
         return Value(pow(args[0].num, args[1].num));
     } else if (args.size() == 2 && args[0].type == Value::VECTOR && args[1].type == Value::NUMBER && args[1].num >= 0 ) {
         unsigned int matrix_dim=args[0].vec.size();
-        Eigen::MatrixXd powMatrix(4,4),resultMatrix(4,4);
+        Eigen::MatrixXd powMatrix(4,4);
         powMatrix.resize(matrix_dim,matrix_dim);
-        resultMatrix.resize(matrix_dim,matrix_dim);
         powMatrix.setIdentity(matrix_dim,matrix_dim);
-        resultMatrix.setIdentity(matrix_dim,matrix_dim);
-        Value returnVector;
-        returnVector.type = Value::VECTOR;
+        Value resultMatrix;
+        resultMatrix.type = Value::MATRIX;
+        resultMatrix.matrix.setIdentity(matrix_dim,matrix_dim);
         if( args[0].vec.size() != matrix_dim ) return Value();
         for ( unsigned int i=0; i<matrix_dim; i++ ) {
             if( args[0].vec[i]->vec.size() != matrix_dim ) return Value();
@@ -262,18 +261,9 @@ Value builtin_pow(const Context *, const std::vector<std::string>&, const std::v
             }
         }
         for ( unsigned int i=1; i<=args[1].num; i++ ) {
-            resultMatrix = resultMatrix * powMatrix;
+            resultMatrix.matrix = resultMatrix.matrix * powMatrix;
         }
-        for ( unsigned int i=0; i<matrix_dim; i++ ) {
-            Value *resultVector = new Value();
-            resultVector->type = Value::VECTOR;
-            for ( unsigned int j=0; j<matrix_dim; j++ ) {
-                Value *resultValue = new Value(resultMatrix(i,j));
-                resultVector->append(resultValue);
-            }
-            returnVector.append(resultVector);
-        }
-        return returnVector;
+        return resultMatrix;
     }
     return Value();
 }
@@ -520,21 +510,10 @@ Value builtin_identity(const Context *, const std::vector<std::string>&, const s
 {
     if (args.size() == 1 && args[0].type == Value::NUMBER && args[0].num >= 0 ) {
             unsigned int matrix_dim=(unsigned int) args[0].num;
-            Eigen::MatrixXd idMatrix(4,4);
-            idMatrix.resize(matrix_dim,matrix_dim);
-            idMatrix.setIdentity(matrix_dim,matrix_dim);
-            Value returnVector;
-            returnVector.type = Value::VECTOR;
-            for ( unsigned int i=0; i<args[0].num; i++ ) {
-                Value *resultVector = new Value();
-                resultVector->type = Value::VECTOR;
-                for ( unsigned int j=0; j<args[0].num; j++ ) {
-                    Value *resultValue = new Value(idMatrix(i,j));
-                    resultVector->append(resultValue);
-                }
-                returnVector.append(resultVector);
-            }
-            return returnVector;
+        Value returnId;
+        returnId.type = Value::MATRIX;
+        returnId.matrix.setIdentity(matrix_dim,matrix_dim);
+    return returnId;
         }
     return Value();
 }

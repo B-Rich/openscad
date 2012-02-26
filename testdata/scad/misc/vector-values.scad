@@ -37,4 +37,25 @@ echo(str("Testing alternate asymmetric matrix * matrix: ",mb5*ma5));
 
 echo(str("  Bounds check: ",ma5*ma4));
 
+m6=ma5*mb5;
+
+echo(str("Testing matrix+vectorMatrix addition: ",m6+m2));
+echo(str("Testing vectorMatrix+matrix addition: ",m2+m6));
+echo(str("Testing matrix+matrix addition: ",m6+m6));
+
+echo(str("Testing matrix-vectorMatrix subtraction: ",m6-m2));
+echo(str("Testing vectorMatrix-matrix subtraction: ",m2-m6));
+echo(str("Testing matrix-matrix subtraction: ",m6-m6));
+
+echo(str("Testing scalar*matrix: ",4*m6));
+echo(str("Testing matrix*scalar: ",m6*4));
+
+echo(str("Texting matrix/scalar: ",m6/4));
+echo(str("Testing vectorMatrix/scalar: ",[[2,1],[-1,0]]/4));
+echo(str("Testing scalar/matrix, i.e. scalar * matrix.inverse(): ",1/m6));
+echo(str("Testing scalar/vectorMatrix: ",1/[[2,1],[-1,0]]));
+echo(str("Testing matrix * (1/matrix): ", m6 * (1/m6) ) );
+degenerate_m1=identity(2)*[[1,0],[0,0]];
+echo(str("  Bounds check 1/[[1,0],[0,0]]: ",1/degenerate_m1));
+
 cube(1.0);

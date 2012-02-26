@@ -40,7 +40,7 @@ Value::Value()
 Value::~Value()
 {
 	for (size_t i = 0; i < this->vec.size(); i++) delete this->vec[i];
-	this->vec.clear();
+    this->vec.clear();
 }
 
 Value::Value(bool v)
@@ -88,7 +88,8 @@ Value& Value::operator = (const Value &v)
 	this->range_begin = v.range_begin;
 	this->range_step = v.range_step;
 	this->range_end = v.range_end;
-	this->text = v.text;
+    this->text = v.text;
+    this->matrix = v.matrix;
 	return *this;
 }
 
@@ -124,7 +125,42 @@ Value Value::operator + (const Value &v) const
 		for (size_t i = 0; i < this->vec.size() && i < v.vec.size(); i++)
 			r.vec.push_back(new Value(*this->vec[i] + *v.vec[i]));
 		return r;
-	}
+    }
+    if(this->type == MATRIX && v.type == MATRIX) {
+        Value m;
+        m.type = MATRIX;
+        m.matrix=this->matrix+v.matrix;
+        return m;
+    }
+    if(this->type == MATRIX && v.type == VECTOR) {
+        Value m;
+        m.type = MATRIX;
+        m.matrix = this->matrix;
+        if(v.vec.size() != (unsigned) m.matrix.rows()) return Value();
+        for( size_t i=0; i<(unsigned) m.matrix.rows(); i++) {
+            if(v.vec[i]->vec.size() != (unsigned) m.matrix.cols()) return Value();
+            for(size_t j=0;j<(unsigned) m.matrix.cols(); j++) {
+                if(v.vec[i]->vec[j]->type != NUMBER) return Value();
+                m.matrix(i,j)+=v.vec[i]->vec[j]->num;
+            }
+        }
+        return m;
+    }
+    if(this->type == VECTOR && v.type == MATRIX) {
+        Value m;
+        m.type = MATRIX;
+        m.matrix = v.matrix;
+        if(this->vec.size() != (unsigned) m.matrix.rows()) return Value();
+        for( size_t i=0; i<(unsigned) m.matrix.rows(); i++) {
+            if(this->vec[i]->vec.size() != (unsigned) m.matrix.cols()) return Value();
+            for(size_t j=0;j<(unsigned) m.matrix.cols(); j++) {
+                if(this->vec[i]->vec[j]->type != NUMBER) return Value();
+                m.matrix(i,j)+=this->vec[i]->vec[j]->num;
+            }
+        }
+        return m;
+    }
+
 	if (this->type == NUMBER && v.type == NUMBER) {
 		return Value(this->num + v.num);
 	}
@@ -140,7 +176,41 @@ Value Value::operator - (const Value &v) const
 			r.vec.push_back(new Value(*this->vec[i] - *v.vec[i]));
 		return r;
 	}
-	if (this->type == NUMBER && v.type == NUMBER) {
+    if(this->type == MATRIX && v.type == MATRIX) {
+        Value m;
+        m.type = MATRIX;
+        m.matrix=this->matrix-v.matrix;
+        return m;
+    }
+    if(this->type == MATRIX && v.type == VECTOR) {
+        Value m;
+        m.type = MATRIX;
+        m.matrix = this->matrix;
+        if(v.vec.size() != (unsigned) m.matrix.rows()) return Value();
+        for( size_t i=0; i<(unsigned) m.matrix.rows(); i++) {
+            if(v.vec[i]->vec.size() != (unsigned) m.matrix.cols()) return Value();
+            for(size_t j=0;j<(unsigned) m.matrix.cols(); j++) {
+                if(v.vec[i]->vec[j]->type != NUMBER) return Value();
+                m.matrix(i,j)-=v.vec[i]->vec[j]->num;
+            }
+        }
+        return m;
+    }
+    if(this->type == VECTOR && v.type == MATRIX) {
+        Value m;
+        m.type = MATRIX;
+        m.matrix = -v.matrix;
+        if(this->vec.size() != (unsigned) m.matrix.rows()) return Value();
+        for( size_t i=0; i<(unsigned) m.matrix.rows(); i++) {
+            if(this->vec[i]->vec.size() != (unsigned) m.matrix.cols()) return Value();
+            for(size_t j=0;j<(unsigned) m.matrix.cols(); j++) {
+                if(this->vec[i]->vec[j]->type != NUMBER) return Value();
+                m.matrix(i,j)+=this->vec[i]->vec[j]->num;
+            }
+        }
+        return m;
+    }
+    if (this->type == NUMBER && v.type == NUMBER) {
 		return Value(this->num - v.num);
 	}
 	return Value();
@@ -164,7 +234,26 @@ Value Value::operator * (const Value &v) const
 	}
 	if (this->type == NUMBER && v.type == NUMBER) {
 		return Value(this->num * v.num);
-	}
+    }
+    if (this->type == NUMBER && v.type == MATRIX) {
+        Value m;
+        m.type = MATRIX;
+        m.matrix=this->num*v.matrix;
+        return m;
+    }
+    if (this->type == MATRIX && v.type == NUMBER) {
+        Value m;
+        m.type = MATRIX;
+        m.matrix=this->matrix*v.num;
+        return m;
+    }
+    if (this->type == MATRIX && v.type == MATRIX && this->matrix.rows() == v.matrix.cols() ) {
+        Value m;
+        m.type=MATRIX;
+        m.matrix=this->matrix * v.matrix;
+        return m;
+    }
+
 	if (this->type == VECTOR && v.type == VECTOR && this->vec.size() == v.vec.size() ) {
 	  if ( this->vec[0]->type == NUMBER && v.vec[0]->type == NUMBER ) {
 		// Vector dot product.
@@ -204,25 +293,25 @@ Value Value::operator * (const Value &v) const
 		return r;
 	  }
 	}
-	if (this->type == VECTOR && v.type == VECTOR &&  this->vec[0]->type == VECTOR && v.vec[0]->type == VECTOR && this->vec[0]->vec.size() == v.vec.size() ) {
-		// Matrix * Matrix
-		Value rrow;
-		rrow.type = VECTOR;
-		for ( size_t i=0; i < this->vec.size(); i++ ) {
-		  Value * rcol=new Value();
-		  rcol->type = VECTOR;
-		  for ( size_t j=0; j < this->vec.size(); j++ ) {
-		    double r_e=0.0;
-		    for ( size_t k=0; k < v.vec.size(); k++ ) {
-		      r_e = r_e + (this->vec[i]->vec[k]->num * v.vec[k]->vec[j]->num);
-		    }
-		    // PRINTB("  r_e = %s",r_e);
-		    rcol->vec.push_back(new Value(r_e));
-		  }
-		  rrow.vec.push_back(rcol);
-		}
-		return rrow;
-	}
+    if (this->type == VECTOR && v.type == VECTOR &&  this->vec[0]->type == VECTOR && v.vec[0]->type == VECTOR && this->vec[0]->vec.size() == v.vec.size() ) {
+        Value rmatrix;
+        rmatrix.type = MATRIX;
+        Eigen::MatrixXd lm(1,1),rm(1,1);
+        lm.resize(this->vec.size(),this->vec[0]->vec.size());
+        rm.resize(v.vec.size(),v.vec[0]->vec.size());
+        for ( size_t i=0; i < this->vec.size(); i++ ) {
+            for ( size_t j=0; j < this->vec[i]->vec.size(); j++ ) {
+                lm(i,j)=this->vec[i]->vec[j]->num;
+            }
+        }
+        for ( size_t i=0; i < v.vec.size(); i++ ) {
+            for ( size_t j=0; j < v.vec[i]->vec.size(); j++ ) {
+                rm(i,j)=v.vec[i]->vec[j]->num;
+            }
+        }
+        rmatrix.matrix=lm*rm;
+        return rmatrix;
+    }
 	return Value();
 }
 
@@ -244,7 +333,24 @@ Value Value::operator / (const Value &v) const
 	}
 	if (this->type == NUMBER && v.type == NUMBER) {
 		return Value(this->num / v.num);
-	}
+    }
+    if (this->type == MATRIX && v.type == NUMBER) {
+            Value m;
+            m.type=MATRIX;
+        m.matrix=this->matrix;
+        m.matrix/=(double)v.num;
+            return m;
+    }
+    if(this->type == NUMBER && v.type == MATRIX) {
+        Value m;
+        m.type=MATRIX;
+        Eigen::MatrixXd invm(1,1);
+        if(v.matrix.rows() != v.matrix.cols()) return Value();
+        invm=v.matrix.inverse();
+        m.matrix=(double)this->num * invm;
+        return m;
+    }
+
 	return Value();
 }
 
@@ -296,7 +402,18 @@ Value Value::operator == (const Value &v) const
 			if (!(*this->vec[i] == *v.vec[i]).b)
 				return Value(false);
 		return Value(true);
-	}
+    }
+    if (this->type == MATRIX && v.type == MATRIX) {
+        if (this->matrix.rows() == v.matrix.rows()
+                    && this->matrix.cols() == v.matrix.cols() ) {
+        for (size_t i=0; i<(unsigned)this->matrix.rows();i++)
+            for(size_t j=0;j<(unsigned)this->matrix.cols();j++)
+                if(this->matrix(i,j) != v.matrix(i,j)) return Value(false);
+            return Value(true);
+    }
+        else
+            return Value(false);
+    }
 	if (this->type == STRING && v.type == STRING) {
 		return Value(this->text == v.text);
 	}
@@ -458,7 +575,20 @@ std::string Value::toString() const
 		break;
 	case BOOL:
 		stream << (this->b ? "true" : "false");
-		break;
+        break;
+    case MATRIX:
+        stream << '[';
+                  for ( size_t i = 0; i<(unsigned) this->matrix.rows(); i++) {
+              if (i>0) stream << ", ";
+            stream << '[';
+            for ( size_t j=0; j<(unsigned) this->matrix.cols(); j++) {
+                if (j>0) stream << ", ";
+                stream << this->matrix(i,j);
+            }
+            stream << ']';
+        }
+        stream << ']';
+        break;
 	default:
 		stream << "undef";
 	}
@@ -483,7 +613,10 @@ bool Value::toBool() const
 		break;
 	case BOOL:
 		return this->b;
-		break;
+        break;
+    case MATRIX:
+        return (this->matrix.rows()>0 && this->matrix.cols()>0);
+        break;
 	default:
 		return false;
 		break;

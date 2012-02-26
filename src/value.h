@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <Eigen/Core>
+#include <Eigen/LU>
 
 class QuotedString : public std::string
 {
