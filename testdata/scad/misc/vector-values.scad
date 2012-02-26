@@ -58,4 +58,6 @@ echo(str("Testing matrix * (1/matrix): ", m6 * (1/m6) ) );
 degenerate_m1=identity(2)*[[1,0],[0,0]];
 echo(str("  Bounds check 1/[[1,0],[0,0]]: ",1/degenerate_m1));
 
+echo(str("Matrix row access: ",m6[0]));
+
 cube(1.0);

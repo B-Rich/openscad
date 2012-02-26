@@ -89,7 +89,16 @@ Value Expression::evaluate(const Context *context) const
 			unsigned int i = int(v2.num);
 			if (i < v1.text.size())
 				return Value(v1.text.substr(i, 1));
-		}
+        }
+        if (v1.type == Value::MATRIX && v2.type == Value::NUMBER) {
+            unsigned int rowIndex = int(v2.num);
+            Value returnVector;
+            returnVector.type=Value::VECTOR;
+            for(size_t i=0; i<(unsigned)v1.matrix.cols(); i++) {
+                returnVector.vec.push_back(new Value(v1.matrix(rowIndex,i)));
+            }
+            return returnVector;
+        }
 		return Value();
 	}
 	if (this->type == "I")
