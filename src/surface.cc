@@ -66,7 +66,8 @@ public:
 
 	Filename filename;
 	bool center;
-	int convexity;
+        int convexity;
+        double scale;
 	virtual PolySet *evaluate_polyset(class PolySetEvaluator *) const;
 };
 
@@ -74,10 +75,11 @@ AbstractNode *SurfaceModule::evaluate(const Context *ctx, const ModuleInstantiat
 {
 	SurfaceNode *node = new SurfaceNode(inst);
 	node->center = false;
-	node->convexity = 1;
+        node->convexity = 1;
+        node->scale = 1.0;
 
 	std::vector<std::string> argnames;
-	argnames += "file", "center", "convexity";
+        argnames += "file", "center", "convexity", "scale";
 	std::vector<Expression*> argexpr;
 
 	Context c(ctx);
@@ -95,7 +97,12 @@ AbstractNode *SurfaceModule::evaluate(const Context *ctx, const ModuleInstantiat
 		node->convexity = (int)convexity.num;
 	}
 
-	return node;
+    Value scale = c.lookup_variable("scale", true);
+    if (scale.type == Value::NUMBER) {
+        node->scale = (double)scale.num;
+    }
+
+    return node;
 }
 
 PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
@@ -103,6 +110,7 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
     handle_dep(filename);
     bool isImage;
     Image image;
+    Blob blob;
     // image.magick("PNG");
     try {
         image.read( filename );
@@ -115,20 +123,33 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
     PolySet *p = new PolySet();
     int lines = 0, columns = 0;
     boost::unordered_map<std::pair<int,int>,double> data;
+    // boost::unordered_map<std::pair<int,int>,double> data_alpha;
     double min_val = 0;
     if(isImage) {
-        PRINTB("surface: image '%s'; not supported yet.",filename);
+        // FIXME: Changing 'scale' doesn't trigger reloading/regenerating image data.
+        PRINTB("surface: image '%s'; large images may crash OpenSCAD; use scale as needed.",filename);
         lines = image.baseRows();
-        PRINTB("       : lines = %d",lines);
         columns = image.baseColumns();
+        PRINTB("       : lines = %d",lines);
         PRINTB("       : columns = %d",columns);
+        PRINTB("       : scale =  %d",scale);
+        image.scale(Geometry(scale*columns,scale*lines));
+        image.write( &blob );
+        image.read(blob);
+        lines = image.baseRows();
+        columns = image.baseColumns();
+        PRINTB("       : lines (scaled) = %d",lines);
+        PRINTB("       : columns (scaled) = %d",columns);
+        // Gray Scale pixel shade range is 0.0 - 1.0
         ColorGray thisPixel;
         for( int ix =0; ix<columns; ix++) {
             for( int jy=0;jy<lines;jy++) {
                 thisPixel=image.pixelColor(ix,jy);
                 double v=thisPixel.shade();
+                // double a=thisPixel.alpha();
                 data[std::make_pair(lines-jy-1,ix)]=v;
-                min_val = std::min(v-1, min_val);
+                // data_alpha[std::make_pair(lines-jy-1,ix)]=a;
+                min_val = std::min(v-0.01, min_val);
             }
         }
         // return NULL;
@@ -158,8 +179,9 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
 			BOOST_FOREACH(const std::string &token, tokens) {
 				double v = boost::lexical_cast<double>(token);
 				data[std::make_pair(lines, col++)] = v;
-				if (col > columns) columns = col;
-				min_val = std::min(v-1, min_val);
+                            // data_alpha[std::make_pair(lines,col++)]=v-0.5;
+                if (col > columns) columns = col;
+                min_val = std::min(v-1, min_val);
 			}
 		}
 		catch (boost::bad_lexical_cast &blc) {
@@ -222,7 +244,7 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
 		p->insert_vertex(ox + columns-1, oy + i, min_val);
 	}
 
-	for (int i = 1; i < columns; i++)
+    for (int i = 1; i < columns; i++)
 	{
 		p->append_poly();
 		p->insert_vertex(ox + i-1, oy + 0, min_val);
