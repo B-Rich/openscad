@@ -89,17 +89,33 @@ Value Expression::evaluate(const Context *context) const
 			unsigned int i = int(v2.num);
 			if (i < v1.text.size())
 				return Value(v1.text.substr(i, 1));
-        }
-        if (v1.type == Value::MATRIX && v2.type == Value::NUMBER) {
-            unsigned int rowIndex = int(v2.num);
-            Value returnVector;
-            returnVector.type=Value::VECTOR;
-            for(size_t i=0; i<(unsigned)v1.matrix.cols(); i++) {
-                returnVector.vec.push_back(new Value(v1.matrix(rowIndex,i)));
-            }
-            return returnVector;
-        }
-		return Value();
+               }
+               if (v1.type == Value::MATRIX && v2.type == Value::NUMBER) {
+                  unsigned int rowIndex = int(v2.num);
+                  Value returnVector;
+                  returnVector.type=Value::VECTOR;
+                  for(size_t i=0; i<(unsigned)v1.matrix.cols(); i++) {
+                      returnVector.vec.push_back(new Value(v1.matrix(rowIndex,i)));
+                  }
+                  return returnVector;
+               }
+               if (v1.type == Value::POLYSET && v2.type == Value::NUMBER) {
+                  unsigned int polyIndex = int(v2.num);
+                  Value returnMatrix;
+                  PolySet::Polygon thisPoly;
+                  Vector3d thisPt;
+                  returnMatrix.type=Value::MATRIX;
+                  if(polyIndex>=v1.poly->polygons.size()) return Value();
+                  thisPoly=v1.poly->polygons[polyIndex];
+                  returnMatrix.matrix.resize(thisPoly.size(),thisPoly.at(0).size());
+                  for(size_t i=0; i<(unsigned)thisPoly.size(); i++) {
+                    thisPt=thisPoly.at(i);
+                    for(size_t j=0; j<(unsigned)thisPt.size(); j++)
+                        returnMatrix.matrix(i,j)=thisPt[j];
+                  }
+                  return returnMatrix;
+               }
+               return Value();
 	}
 	if (this->type == "I")
 		return this->children[0]->evaluate(context).inv();

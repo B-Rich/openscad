@@ -28,7 +28,12 @@ if(render_obj==3) {
 // echo usage
 tmp=read();
 
-if(render_obj==4) assign(readImg=read("example025.png",true,0.25)) {
-  surface(read=readImg);
-  translate([0,0,10]) surface(read=readImg);
+if(render_obj==4) assign(readImg=read("example025.png",true,0.5) ) {
+  echo(str("Number of polygons: ",len(readImg)));
+  echo(str("  First polygon: ",readImg[0]));
+  //numPolys=len(readImg);
+  echo(str("  Last polygon: ", readImg[ (len(readImg)-1) ] ) );
+  echo(str("  Bounds check: ", readImg[ len(readImg) ] ) );
+  rotate([90,0,0]) scale([1,1,4]) surface(read=readImg);
+  translate([0,0,-30]) surface(read=readImg);
 }

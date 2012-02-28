@@ -313,7 +313,16 @@ Value builtin_length(const Context *, const std::vector<std::string>&, const std
 		if (args[0].type == Value::VECTOR)
 			return Value((double) args[0].vec.size());
 		if (args[0].type == Value::STRING)
-			return Value((double) args[0].text.size());
+                    return Value((double) args[0].text.size());
+                if (args[0].type == Value::MATRIX) {
+                    Value rowCols;
+                    rowCols.type=Value::VECTOR;
+                    rowCols.vec[0]=new Value( (double) args[0].matrix.rows());
+                    rowCols.vec[1]=new Value( (double) args[0].matrix.cols());
+                    return rowCols;
+                }
+                if (args[0].type == Value::POLYSET)
+                    return Value((double) args[0].poly->polygons.size());
 	}
 	return Value();
 }
