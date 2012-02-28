@@ -35,6 +35,10 @@
 #include "stl-utils.h"
 #include "printutils.h"
 #include <Eigen/Core>
+#include "handle_dep.h"
+#include <Magick++.h>
+
+using namespace Magick;
 
 AbstractFunction::~AbstractFunction()
 {
@@ -518,6 +522,161 @@ Value builtin_identity(const Context *, const std::vector<std::string>&, const s
     return Value();
 }
 
+Value builtin_read(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
+{
+    double center=false;
+    double scale=1.0;
+    if(args.size() ==0 || args[0].type != Value::STRING ) {
+        PRINT( "Usage: read(file_name[,center[,scale[,convexity]]])" );
+        PRINT( "  Defaults:");
+        PRINTB("            center : %s",center);
+        PRINTB("            scale  : %s",scale);
+        return Value();
+    }
+    Value fname=args[0];
+    Filename filename=fname.text;
+    handle_dep(filename);
+    Value returnPoly;
+    returnPoly.type = Value::POLYSET;
+    PolySet *p = returnPoly.poly;
+    //returnPoly.poly->convexity = 2;
+    p->convexity = 2;
+    if ( args.size() >3 && args[3].type == Value::NUMBER ) {
+        // returnPoly.poly->convexity = args[3].num;
+        p->convexity = args[3].num;
+    }
+
+    if ( args.size() >1 && args[1].type == Value::BOOL ) {
+        center = args[1].b;
+    }
+
+    if ( args.size() >2 && args[2].type == Value::NUMBER ) {
+        scale = args[2].num;
+    }
+
+    int lines = 0, columns = 0;
+    boost::unordered_map<std::pair<int,int>,double> data;
+    // boost::unordered_map<std::pair<int,int>,double> data_alpha;
+    double min_val = 0;
+
+    bool isImage;
+    Image image;
+    Blob blob;
+    try {
+        image.read( filename );
+        PRINTB("read: loaded image '%s'",filename );
+        isImage=true;
+    } catch( Exception &error_ ) {
+        PRINTB("read: %s",error_.what() );
+        isImage=false;
+    }
+
+    if(isImage) {
+        PRINTB("read: image '%s'; large images may crash OpenSCAD; use scale as needed.",filename);
+        lines = image.baseRows();
+        columns = image.baseColumns();
+        PRINTB("       : lines = %d",lines);
+        PRINTB("       : columns = %d",columns);
+        PRINTB("       : scale =  %d",scale);
+        image.scale(Geometry(scale*columns,scale*lines));
+        image.write( &blob );
+        image.read(blob);
+        lines = image.baseRows();
+        columns = image.baseColumns();
+        PRINTB("       : lines (scaled) = %d",lines);
+        PRINTB("       : columns (scaled) = %d",columns);
+        // Gray Scale pixel shade range is 0.0 - 1.0
+        ColorGray thisPixel;
+        for( int ix =0; ix<columns; ix++) {
+            for( int jy=0;jy<lines;jy++) {
+                thisPixel=image.pixelColor(ix,jy);
+                double v=thisPixel.shade();
+                // double a=thisPixel.alpha();
+                data[std::make_pair(lines-jy-1,ix)]=v;
+                // data_alpha[std::make_pair(lines-jy-1,ix)]=a;
+                min_val = std::min(v-0.01, min_val);
+            }
+        }
+    } else {
+        return Value();
+    }
+
+    double ox = center ? -(columns-1)/2.0 : 0;
+    double oy = center ? -(lines-1)/2.0 : 0;
+
+    for (int i = 1; i < lines; i++)
+    for (int j = 1; j < columns; j++)
+    {
+        double v1 = data[std::make_pair(i-1, j-1)];
+        double v2 = data[std::make_pair(i-1, j)];
+        double v3 = data[std::make_pair(i, j-1)];
+        double v4 = data[std::make_pair(i, j)];
+        double vx = (v1 + v2 + v3 + v4) / 4;
+
+        p->append_poly();
+        p->append_vertex(ox + j-1, oy + i-1, v1);
+        p->append_vertex(ox + j, oy + i-1, v2);
+        p->append_vertex(ox + j-0.5, oy + i-0.5, vx);
+
+        p->append_poly();
+        p->append_vertex(ox + j, oy + i-1, v2);
+        p->append_vertex(ox + j, oy + i, v4);
+        p->append_vertex(ox + j-0.5, oy + i-0.5, vx);
+
+        p->append_poly();
+        p->append_vertex(ox + j, oy + i, v4);
+        p->append_vertex(ox + j-1, oy + i, v3);
+        p->append_vertex(ox + j-0.5, oy + i-0.5, vx);
+
+        p->append_poly();
+        p->append_vertex(ox + j-1, oy + i, v3);
+        p->append_vertex(ox + j-1, oy + i-1, v1);
+        p->append_vertex(ox + j-0.5, oy + i-0.5, vx);
+    }
+
+    for (int i = 1; i < lines; i++)
+    {
+        p->append_poly();
+        p->append_vertex(ox + 0, oy + i-1, min_val);
+        p->append_vertex(ox + 0, oy + i-1, data[std::make_pair(i-1, 0)]);
+        p->append_vertex(ox + 0, oy + i, data[std::make_pair(i, 0)]);
+        p->append_vertex(ox + 0, oy + i, min_val);
+
+        p->append_poly();
+        p->insert_vertex(ox + columns-1, oy + i-1, min_val);
+        p->insert_vertex(ox + columns-1, oy + i-1, data[std::make_pair(i-1, columns-1)]);
+        p->insert_vertex(ox + columns-1, oy + i, data[std::make_pair(i, columns-1)]);
+        p->insert_vertex(ox + columns-1, oy + i, min_val);
+    }
+
+    for (int i = 1; i < columns; i++)
+    {
+        p->append_poly();
+        p->insert_vertex(ox + i-1, oy + 0, min_val);
+        p->insert_vertex(ox + i-1, oy + 0, data[std::make_pair(0, i-1)]);
+        p->insert_vertex(ox + i, oy + 0, data[std::make_pair(0, i)]);
+        p->insert_vertex(ox + i, oy + 0, min_val);
+
+        p->append_poly();
+        p->append_vertex(ox + i-1, oy + lines-1, min_val);
+        p->append_vertex(ox + i-1, oy + lines-1, data[std::make_pair(lines-1, i-1)]);
+        p->append_vertex(ox + i, oy + lines-1, data[std::make_pair(lines-1, i)]);
+        p->append_vertex(ox + i, oy + lines-1, min_val);
+    }
+
+    p->append_poly();
+    for (int i = 0; i < columns-1; i++)
+        p->insert_vertex(ox + i, oy + 0, min_val);
+    for (int i = 0; i < lines-1; i++)
+        p->insert_vertex(ox + columns-1, oy + i, min_val);
+    for (int i = columns-1; i > 0; i--)
+        p->insert_vertex(ox + i, oy + lines-1, min_val);
+    for (int i = lines-1; i > 0; i--)
+        p->insert_vertex(ox + 0, oy + i, min_val);
+
+    return returnPoly;
+}
+
 #define QUOTE(x__) # x__
 #define QUOTED(x__) QUOTE(x__)
 
@@ -572,6 +731,7 @@ void register_builtin_functions()
 	Builtins::init("lookup", new BuiltinFunction(&builtin_lookup));
 	Builtins::init("search", new BuiltinFunction(&builtin_search));
         Builtins::init("identity", new BuiltinFunction(&builtin_identity));
+        Builtins::init("read", new BuiltinFunction(&builtin_read));
         Builtins::init("version", new BuiltinFunction(&builtin_version));
 	Builtins::init("version_num", new BuiltinFunction(&builtin_version_num));
 }

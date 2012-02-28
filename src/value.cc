@@ -41,6 +41,7 @@ Value::~Value()
 {
 	for (size_t i = 0; i < this->vec.size(); i++) delete this->vec[i];
     this->vec.clear();
+    this->poly = NULL;
 }
 
 Value::Value(bool v)
@@ -71,6 +72,13 @@ Value::Value(const Eigen::MatrixXd &m)
     this->matrix = m;
 }
 
+//Value::Value(const PolySet &ps)
+//{
+//    reset_undef();
+//    this->type = POLYSET;
+//    this->poly= &ps;
+//}
+
 Value::Value(const Value &v)
 {
 	*this = v;
@@ -88,8 +96,9 @@ Value& Value::operator = (const Value &v)
 	this->range_begin = v.range_begin;
 	this->range_step = v.range_step;
 	this->range_end = v.range_end;
-    this->text = v.text;
-    this->matrix = v.matrix;
+        this->text = v.text;
+        this->matrix = v.matrix;
+        this->poly = v.poly;
 	return *this;
 }
 
@@ -518,6 +527,7 @@ void Value::reset_undef()
 	this->range_end = 0;
         this->text = "";
         this->matrix.setZero(1,1);
+        this->poly = new PolySet();
 }
 
 std::string Value::toString() const

@@ -5,6 +5,7 @@
 #include <string>
 #include <Eigen/Core>
 #include <Eigen/LU>
+#include "polyset.h"
 
 class QuotedString : public std::string
 {
@@ -32,7 +33,8 @@ public:
           RANGE,
           VECTOR,
           STRING,
-          MATRIX
+          MATRIX,
+        POLYSET
 	};
 
 	enum type_e type;
@@ -45,6 +47,7 @@ public:
 	double range_end;
         std::string text;
         Eigen::MatrixXd matrix;
+        PolySet *poly;
 
 	Value();
 	~Value();
@@ -53,6 +56,7 @@ public:
 	Value(double v);
         Value(const std::string &t);
         Value(const Eigen::MatrixXd &m);
+        // Value(const PolySet &ps);
 
 	Value(const Value &v);
 	Value& operator = (const Value &v);
