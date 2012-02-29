@@ -13,8 +13,13 @@
 #include <Eigen/Core>
 #include "handle_dep.h"
 #include <Magick++.h>
+#include <string>
 
 using namespace Magick;
 
 PolySet * readPolySetFromImage( const Filename, bool, double, int );
+
+PolySet * readPolySetFromSTL( const Filename , int );
+
+PolySet * readPolySetFromDXF( const Filename , std::string , double , double , double , double , double , double , int );
 

@@ -38,6 +38,7 @@
 #include "handle_dep.h"
 #include <Magick++.h>
 #include "polyutils.h"
+#include <string>
 
 using namespace Magick;
 
@@ -532,13 +533,50 @@ Value builtin_identity(const Context *, const std::vector<std::string>&, const s
     return Value();
 }
 
-Value builtin_read(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
+Value builtin_read_dxf(const Context *c, const std::vector<std::string>&, const std::vector<Value> &args)
+{
+    double fn=c->lookup_variable("$fn").num;
+    double fs=c->lookup_variable("$fs").num;
+    double fa=c->lookup_variable("$fa").num;
+    double scale=1.0;
+    int convexity = 2;
+    if(args.size() ==0 || args[0].type != Value::STRING ) {
+        PRINT( "Usage: read_dxf(file_name[,layername[,origin[,scale[,convexity]]])" );
+        return Value();
+    }
+    Value fname=args[0];
+    Filename filename=fname.text;
+    std::string layername="";
+    double origin_x,origin_y;
+    origin_x = origin_y = 0;
+    Value returnPoly;
+    returnPoly.type = Value::POLYSET;
+
+    if ( args.size() >1 && args[1].type == Value::STRING ) {
+        layername = args[1].text;
+    }
+    if ( args.size() >2 && args[2].type == Value::VECTOR ) {
+        args[2].getv2(origin_x,origin_y);
+    }
+    if ( args.size() >3 && args[3].type == Value::NUMBER ) {
+        scale = args[3].num;
+    }
+    if ( args.size() >4 && args[4].type == Value::NUMBER ) {
+        convexity = args[4].num;
+    }
+
+    PolySet *p = readPolySetFromDXF( filename, layername, origin_x, origin_y, scale, fn, fs, fa, convexity );
+    returnPoly.poly=p;
+    return returnPoly;
+}
+
+Value builtin_read_image(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
 {
     double center=false;
     double scale=1.0;
     int convexity = 2;
     if(args.size() ==0 || args[0].type != Value::STRING ) {
-        PRINT( "Usage: read(file_name[,center[,scale[,convexity]]])" );
+        PRINT( "Usage: read_image(file_name[,center[,scale[,convexity]]])" );
         PRINT( "  Defaults:");
         PRINTB("            center : %s",center);
         PRINTB("            scale  : %s",scale);
@@ -548,9 +586,7 @@ Value builtin_read(const Context *, const std::vector<std::string>&, const std::
     Filename filename=fname.text;
     Value returnPoly;
     returnPoly.type = Value::POLYSET;
-    //returnPoly.poly->convexity = 2;
     if ( args.size() >3 && args[3].type == Value::NUMBER ) {
-        // returnPoly.poly->convexity = args[3].num;
         convexity = args[3].num;
     }
 
@@ -562,6 +598,25 @@ Value builtin_read(const Context *, const std::vector<std::string>&, const std::
         scale = args[2].num;
     }
     PolySet *p = readPolySetFromImage( filename, center, scale, convexity );
+    returnPoly.poly=p;
+    return returnPoly;
+}
+
+Value builtin_read_stl(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
+{
+    int convexity = 2;
+    if(args.size() ==0 || args[0].type != Value::STRING ) {
+        PRINT( "Usage: read_stl(file_name[,convexity])" );
+        return Value();
+    }
+    Value fname=args[0];
+    Filename filename=fname.text;
+    Value returnPoly;
+    returnPoly.type = Value::POLYSET;
+    if ( args.size() >1 && args[1].type == Value::NUMBER ) {
+        convexity = args[1].num;
+    }
+    PolySet *p = readPolySetFromSTL( filename, convexity );
     returnPoly.poly=p;
     return returnPoly;
 }
@@ -620,7 +675,9 @@ void register_builtin_functions()
 	Builtins::init("lookup", new BuiltinFunction(&builtin_lookup));
 	Builtins::init("search", new BuiltinFunction(&builtin_search));
         Builtins::init("identity", new BuiltinFunction(&builtin_identity));
-        Builtins::init("read", new BuiltinFunction(&builtin_read));
+        Builtins::init("read_dxf", new BuiltinFunction(&builtin_read_dxf));
+        Builtins::init("read_image", new BuiltinFunction(&builtin_read_image));
+        Builtins::init("read_stl", new BuiltinFunction(&builtin_read_stl));
         Builtins::init("version", new BuiltinFunction(&builtin_version));
 	Builtins::init("version_num", new BuiltinFunction(&builtin_version_num));
 }
