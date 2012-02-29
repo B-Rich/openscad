@@ -181,6 +181,7 @@ HEADERS += src/parsersettings.h \
            src/openscad.h \
            src/handle_dep.h \
            src/polyset.h \
+           src/polyutils.h \
            src/printutils.h \
            src/value.h \
            src/progress.h \
@@ -213,6 +214,7 @@ SOURCES += src/mathc99.cc \
            src/csgterm.cc \
            src/csgtermnormalizer.cc \
            src/polyset.cc \
+           src/polyutils.cc \
            src/csgops.cc \
            src/transform.cc \
            src/color.cc \

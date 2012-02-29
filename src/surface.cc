@@ -33,7 +33,7 @@
 #include "handle_dep.h" // handle_dep()
 #include "visitor.h"
 #include "value.h"
-// #include "cgalsurfaceutils.h"
+#include "polyutils.h"
 
 #include <sstream>
 #include <fstream>
@@ -43,10 +43,8 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/assign/std/vector.hpp>
-#include <Magick++.h>
 
 using namespace std;
-using namespace Magick;
 using namespace boost::assign; // bring 'operator+=()' into scope
 
 class SurfaceModule : public AbstractModule
@@ -124,52 +122,10 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
 {
     if(read_in != NULL) return read_in;
     handle_dep(filename);
-    bool isImage;
-    Image image;
-    Blob blob;
-    // image.magick("PNG");
-    try {
-        image.read( filename );
-        PRINTB("surface: loaded image '%s'",filename );
-        isImage=true;
-    } catch( Exception &error_ ) {
-        PRINTB("surface: %s",error_.what() );
-        isImage=false;
-    }
     PolySet *p = new PolySet();
     int lines = 0, columns = 0;
     boost::unordered_map<std::pair<int,int>,double> data;
-    // boost::unordered_map<std::pair<int,int>,double> data_alpha;
     double min_val = 0;
-    if(isImage) {
-        // FIXME: Changing 'scale' doesn't trigger reloading/regenerating image data.
-        PRINTB("surface: image '%s'; large images may crash OpenSCAD; use scale as needed.",filename);
-        lines = image.baseRows();
-        columns = image.baseColumns();
-        PRINTB("       : lines = %d",lines);
-        PRINTB("       : columns = %d",columns);
-        PRINTB("       : scale =  %d",scale);
-        image.scale(Geometry(scale*columns,scale*lines));
-        image.write( &blob );
-        image.read(blob);
-        lines = image.baseRows();
-        columns = image.baseColumns();
-        PRINTB("       : lines (scaled) = %d",lines);
-        PRINTB("       : columns (scaled) = %d",columns);
-        // Gray Scale pixel shade range is 0.0 - 1.0
-        ColorGray thisPixel;
-        for( int ix =0; ix<columns; ix++) {
-            for( int jy=0;jy<lines;jy++) {
-                thisPixel=image.pixelColor(ix,jy);
-                double v=thisPixel.shade();
-                // double a=thisPixel.alpha();
-                data[std::make_pair(lines-jy-1,ix)]=v;
-                // data_alpha[std::make_pair(lines-jy-1,ix)]=a;
-                min_val = std::min(v-0.01, min_val);
-            }
-        }
-        // return NULL;
-    } else {
 	std::ifstream stream(filename.c_str());
 
 	if (!stream.good()) {
@@ -208,7 +164,6 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
             }
             lines++;
         }
-    }
 
 	p->convexity = convexity;
 

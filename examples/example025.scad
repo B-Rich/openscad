@@ -22,7 +22,7 @@ if(render_obj==2) {
 }
 
 if(render_obj==3) {
-  scale([0.1,0.1,1]) surface(file="example025.png",center=true,convexity=5,scale=0.5,reconstruct=true);
+  scale([0.1,0.1,1]) surface(read=read("example025.png",true,0.5),center=true,convexity=5,scale=0.5,reconstruct=true);
 }
 
 // echo usage
