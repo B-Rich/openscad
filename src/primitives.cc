@@ -47,7 +47,8 @@ enum primitive_type_e {
 	POLYHEDRON,
 	SQUARE,
 	CIRCLE,
-	POLYGON
+        POLYGON,
+        POLYSET
 };
 
 class PrimitiveModule : public AbstractModule
@@ -89,7 +90,10 @@ public:
 		case POLYGON:
 			return "polygon";
 			break;
-		default:
+                case POLYSET:
+                    return "polyset";
+                    break;
+        default:
 			assert(false && "PrimitiveNode::name(): Unknown primitive type");
 			return AbstractPolyNode::name();
 		}
@@ -100,7 +104,8 @@ public:
 	double fn, fs, fa;
 	primitive_type_e type;
 	int convexity;
-	Value points, paths, triangles;
+    Value points, paths, triangles;
+    PolySet *data;
 	virtual PolySet *evaluate_polyset(class PolySetEvaluator *) const;
 };
 
@@ -109,7 +114,7 @@ AbstractNode *PrimitiveModule::evaluate(const Context *ctx, const ModuleInstanti
 	PrimitiveNode *node = new PrimitiveNode(inst, this->type);
 
 	node->center = false;
-	node->x = node->y = node->z = node->h = node->r1 = node->r2 = 1;
+    node->x = node->y = node->z = node->h = node->r1 = node->r2 = 1;
 
 	std::vector<std::string> argnames;
 	std::vector<Expression*> argexpr;
@@ -136,7 +141,10 @@ AbstractNode *PrimitiveModule::evaluate(const Context *ctx, const ModuleInstanti
 	case POLYGON:
 		argnames += "points", "paths", "convexity";
 		break;
-	default:
+        case POLYSET:
+            argnames += "data", "convexity";
+            break;
+    default:
 		assert(false && "PrimitiveModule::evaluate(): Unknown node type");
 	}
 
@@ -228,6 +236,11 @@ AbstractNode *PrimitiveModule::evaluate(const Context *ctx, const ModuleInstanti
 		node->points = c.lookup_variable("points");
 		node->paths = c.lookup_variable("paths");
 	}
+
+       Value read_in = c.lookup_variable("data", true);
+       if (type == POLYSET && read_in.type == Value::POLYSET) {
+           node->data = read_in.poly;
+       }
 
 	node->convexity = c.lookup_variable("convexity", true).num;
 	if (node->convexity < 1)
@@ -550,6 +563,12 @@ sphere_next_r2:
 		dxf_border_to_ps(p, dd);
 	}
 
+    if (this->type == POLYSET)
+    {
+        p=this->data;
+        p->convexity = convexity;
+    }
+
 	return p;
 }
 
@@ -589,7 +608,10 @@ std::string PrimitiveNode::toString() const
 	case POLYGON:
 		stream << "(points = " << this->points << ", paths = " << this->paths << ", convexity = " << this->convexity << ")";
 			break;
-	default:
+    case POLYSET:
+        stream << "(data = " << this->data << ", convexity = " << this->convexity << ")";
+            break;
+    default:
 		assert(false);
 	}
 
@@ -605,4 +627,5 @@ void register_builtin_primitives()
 	Builtins::init("square", new PrimitiveModule(SQUARE));
 	Builtins::init("circle", new PrimitiveModule(CIRCLE));
 	Builtins::init("polygon", new PrimitiveModule(POLYGON));
+        Builtins::init("polyset", new PrimitiveModule(POLYSET));
 }

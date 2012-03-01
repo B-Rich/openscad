@@ -68,8 +68,6 @@ public:
 	bool center;
         int convexity;
         double scale;
-    bool reconstruct;
-    PolySet *read_in;
     virtual PolySet *evaluate_polyset(class PolySetEvaluator *) const;
 };
 
@@ -79,8 +77,6 @@ AbstractNode *SurfaceModule::evaluate(const Context *ctx, const ModuleInstantiat
 	node->center = false;
         node->convexity = 1;
         node->scale = 1.0;
-    node->reconstruct = false;
-    node->read_in = NULL;
 
 	std::vector<std::string> argnames;
         argnames += "file", "center", "convexity", "scale";
@@ -106,23 +102,14 @@ AbstractNode *SurfaceModule::evaluate(const Context *ctx, const ModuleInstantiat
         node->scale = (double)scale.num;
     }
 
-    Value reconstruct = c.lookup_variable("reconstruct", true);
-    if (reconstruct.type == Value::BOOL) {
-        node->reconstruct = reconstruct.b;
-    }
-    Value read_in = c.lookup_variable("read", true);
-    if (read_in.type == Value::POLYSET) {
-        node->read_in = read_in.poly;
-    }
-
     return node;
 }
 
 PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
 {
-    if(read_in != NULL) return read_in;
     handle_dep(filename);
-    PolySet *p = new PolySet();
+    PolySet *p = readPolySetFromImage( filename, center, scale, convexity);
+	if( p != NULL ) return p;
     int lines = 0, columns = 0;
     boost::unordered_map<std::pair<int,int>,double> data;
     double min_val = 0;
@@ -151,7 +138,6 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
 			BOOST_FOREACH(const std::string &token, tokens) {
 				double v = boost::lexical_cast<double>(token);
 				data[std::make_pair(lines, col++)] = v;
-                            // data_alpha[std::make_pair(lines,col++)]=v-0.5;
                 if (col > columns) columns = col;
                 min_val = std::min(v-1, min_val);
 			}
@@ -239,26 +225,6 @@ PolySet *SurfaceNode::evaluate_polyset(class PolySetEvaluator *) const
 		p->insert_vertex(ox + i, oy + lines-1, min_val);
 	for (int i = lines-1; i > 0; i--)
         p->insert_vertex(ox + 0, oy + i, min_val);
-        // Placeholder for mesh reconstruction to deal with capacity and redundancy issues.
-        if(reconstruct) {
-            PRINTB("    Surface '%s' reconstruction not implemented.",filename);
-            //CGAL_Surface * surface;
-            //PolySet *ps=NULL;
-            //surface = createSurfaceFromPolySet(*p);
-            // PRINTB("      Surface created: '%s'",surface);
-            //CGAL_SMS::Count_stop_predicate<CGAL_Surface> stop(1000);
-            //PRINTB("      Surface stop condition: '%s'","stop");
-            //int r = CGAL_SMS::edge_collapse(*surface
-            //                                ,stop
-            //                                ,CGAL::vertex_index_map(boost::get(CGAL::vertex_external_index,*surface))
-            //                                .edge_index_map(boost::get(CGAL::edge_external_index,*surface))
-            //                                );
-            //PRINTB("      Surface edges removed: %d ",r);
-            // ps = createPolySetFromSurface(*surface);
-            // if(r > 0) return ps;
-            // PRINTB("    Reconstructing surface...");
-            // PRINTB("    Done surface reconstruction");
-        }
 	return p;
 }
 

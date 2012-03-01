@@ -1,6 +1,6 @@
 // example025 rendering an image via surface.
 
-render_obj=6;
+render_obj=5;
 
 if(render_obj==1) {
   intersection()
@@ -22,7 +22,7 @@ if(render_obj==2) {
 }
 
 if(render_obj==3) {
-  scale([0.1,0.1,1]) surface(read=read_image("example025.png",true,0.5),center=true,convexity=5,scale=0.5,reconstruct=true);
+  scale([0.1,0.1,1]) surface(file="example025.png",center=true,convexity=5,scale=0.7);
 }
 
 // echo usage
@@ -36,14 +36,14 @@ if(render_obj==4) assign(readImg=read_image("example025.png",true,0.5) ) {
   //numPolys=len(readImg);
   echo(str("  Last polygon: ", readImg[ (len(readImg)-1) ] ) );
   echo(str("  Bounds check: ", readImg[ len(readImg) ] ) );
-  rotate([90,0,0]) scale([1,1,4]) surface(read=readImg);
-  translate([0,0,-30]) surface(read=readImg);
+  rotate([90,0,0]) scale([1,1,4]) polyset(data=readImg);
+  translate([0,0,-30]) polyset(data=readImg);
 }
 
 if(render_obj==5) {
-  surface(read=read_stl("example012.stl",5));
+  polyset(data=read_stl("example012.stl",4));
 }
 
 if(render_obj==6) {
-  surface(read=read_dxf("example008.dxf","G"));
+  polyset(data=read_dxf("example008.dxf","G"),convexity=2);
 }
