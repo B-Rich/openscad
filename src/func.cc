@@ -42,6 +42,12 @@
 
 using namespace Magick;
 
+#include <stdlib.h>
+#include <boost/filesystem.hpp>
+using namespace boost::filesystem;
+#include <boost/asio.hpp>
+using boost::asio::ip::tcp;
+
 AbstractFunction::~AbstractFunction()
 {
 }
@@ -619,6 +625,26 @@ Value builtin_read_stl(const Context *, const std::vector<std::string>&, const s
     PolySet *p = readPolySetFromSTL( filename, convexity );
     returnPoly.poly=p;
     return returnPoly;
+}
+
+Value builtin_fetch(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
+{
+    if(args.size()<2 || args[0].type != Value::STRING || args[1].type != Value::STRING) {
+        PRINT( "Usage: fetch(localFilename,srcURL1[,srcURL2...])");
+        return Value();
+    }
+    Value localFName=args[0];
+    Filename localFilename=localFName.text;
+    bool isCached=exists(localFilename);
+    if(isCached) {
+        return localFName;
+    }
+    for(size_t i=1; i<args.size(); i++) {
+        Value srcURL = args[i];
+        PRINTB( "  Fetching '%s'...",srcURL.text);
+        // Possible approach: http://www.boost.org/doc/libs/1_49_0/doc/html/boost_asio/example/http/client/async_client.cpp
+    }
+    return Value();
 }
 
 #define QUOTE(x__) # x__

@@ -169,7 +169,7 @@ build_boost()
   tar xjf boost_$bversion.tar.bz2
   cd boost_$bversion
   # We only need the thread and program_options libraries
-  ./bootstrap.sh --prefix=$DEPLOYDIR --with-libraries=thread,program_options,filesystem,system,regex
+  ./bootstrap.sh --prefix=$DEPLOYDIR --with-libraries=thread,program_options,filesystem,system,regex,iostreams,date_time
   if $OPTION_32BIT; then
     BOOST_EXTRA_FLAGS="-arch i386"
   fi
@@ -262,14 +262,40 @@ build_eigen()
   fi
   tar xjf eigen-$version.tar.bz2
   ## File name for v2.0.17
-  ln -s eigen-eigen-b23437e61a07 eigen-$version
+  # ln -s eigen-eigen-b23437e61a07 eigen-$version
+  mkdir -p eigen-$version
   cd eigen-$version
   if $OPTION_32BIT; then
     EIGEN_EXTRA_FLAGS=";i386"
   fi
-  cmake -DCMAKE_INSTALL_PREFIX=$DEPLOYDIR -DEIGEN_BUILD_LIB=ON -DBUILD_SHARED_LIBS=FALSE -DCMAKE_OSX_DEPLOYMENT_TARGET="$MAC_OSX_VERSION_MIN" -DCMAKE_OSX_ARCHITECTURES="x86_64$EIGEN_EXTRA_FLAGS"
+  cmake -DCMAKE_INSTALL_PREFIX=$DEPLOYDIR -DEIGEN_BUILD_LIB=ON -DBUILD_SHARED_LIBS=FALSE -DCMAKE_OSX_DEPLOYMENT_TARGET="$MAC_OSX_VERSION_MIN" -DCMAKE_OSX_ARCHITECTURES="x86_64$EIGEN_EXTRA_FLAGS" ../eigen-eigen-b23437e61a07
   make -j4
   make install
+}
+
+build_eigen3()
+{
+  version=$1
+  echo "Building eigen" $version "..."
+  cd $BASEDIR/src
+  rm -rf eigen-$version
+  ## Directory name for v3.0.5
+  rm -rf eigen-eigen-6e7488e20373
+  if [ ! -f eigen-$version.tar.bz2 ]; then
+    curl -LO http://bitbucket.org/eigen/eigen/get/$version.tar.bz2
+    mv $version.tar.bz2 eigen-$version.tar.bz2
+  fi
+  tar xjf eigen-$version.tar.bz2
+  ## File name for v3.0.5
+  mkdir -p eigen-$version
+  pushd eigen-$version
+  if $OPTION_32BIT; then
+    EIGEN_EXTRA_FLAGS=";i386"
+  fi
+  cmake -DCMAKE_INSTALL_PREFIX=$DEPLOYDIR -DEIGEN_BUILD_LIB=ON -DBUILD_SHARED_LIBS=FALSE -DCMAKE_OSX_DEPLOYMENT_TARGET="$MAC_OSX_VERSION_MIN" -DCMAKE_OSX_ARCHITECTURES="x86_64$EIGEN_EXTRA_FLAGS" ../eigen-eigen-6e7488e20373
+  make -j4
+  make install
+  popd
 }
 
 build_imagemagick()
@@ -289,6 +315,40 @@ build_imagemagick()
   make install
 }
 
+build_flann()
+{
+  version=$1
+  echo "Building flann" $version "..."
+  cd $BASEDIR/src
+  rm -rf flann-$version-src
+  if [ ! -f flann-$version-src.tar.bz2 ]; then
+	curl -LO http://people.cs.ubc.ca/~mariusm/uploads/FLANN/flann-$version-src.zip
+  fi
+  unzip flann-$version-src.zip
+  cd flann-$version-src
+  cmake -DCMAKE_INSTALL_PREFIX=$DEPLOYDIR -DBUILD_SHARED_LIBS=FALSE -DCMAKE_OSX_DEPLOYMENT_TARGET="$MAC_OSX_VERSION_MIN" -DCMAKE_OSX_ARCHITECTURES="x86_64"
+  make -j4
+  make install
+}
+
+build_pcl()
+{
+  version=$1
+  echo "Building PCL" $version "..."
+  cd $BASEDIR/src
+  rm -rf PCL-$version-Source
+  if [ ! -f PCL-$version-Source.tar.bz2 ]; then
+	# PCL-1.5.1 specific URL:
+	curl -GLO http://dev.pointclouds.org/attachments/download/771/PCL-$version-Source.tar.bz2
+  fi
+  tar xjf PCL-$version-Source.tar.bz2
+  cd PCL-$version-Source
+  cmake -DCMAKE_INSTALL_PREFIX=$DEPLOYDIR -DBUILD_SHARED_LIBS=FALSE -DCMAKE_OSX_DEPLOYMENT_TARGET="$MAC_OSX_VERSION_MIN" -DCMAKE_OSX_ARCHITECTURES="x86_64"
+  make -j4
+  make install
+}
+
+
 if [ ! -f $OPENSCADDIR/openscad.pro ]; then
   echo "Must be run from the OpenSCAD source root directory"
   exit 0
@@ -305,6 +365,7 @@ echo "Using basedir:" $BASEDIR
 mkdir -p $SRCDIR $DEPLOYDIR
 build_imagemagick 6.7.5-6
 build_eigen 2.0.17
+# build_eigen3 3.0.5
 build_gmp 5.0.4
 build_mpfr 3.1.0
 build_boost 1.47.0
@@ -312,3 +373,6 @@ build_boost 1.47.0
 build_cgal 3.9
 build_glew 1.7.0
 build_opencsg 1.3.2
+# Install flann via macports for all dependencies for now.
+# build_flann 1.7.1
+# build_pcl 1.5.1

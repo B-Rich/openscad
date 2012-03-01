@@ -4,6 +4,7 @@
 #   BOOSTDIR
 #   CGALDIR
 #   EIGEN2DIR
+#   EIGEN3DIR
 #   GLEWDIR
 #   OPENCSGDIR
 #   IMAGEMAGICKDIR
@@ -111,6 +112,7 @@ CONFIG += cgal
 CONFIG += opencsg
 CONFIG += boost
 CONFIG += eigen2
+# CONFIG += eigen3
 CONFIG += imagemagick
 
 #Uncomment the following line to enable QCodeEdit

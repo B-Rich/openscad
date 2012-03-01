@@ -1,5 +1,7 @@
-/* PolySet Utility Functions */
+#ifndef POLYUTILS_H_
+#define POLYUTILS_H_
 
+/* PolySet Utility Functions */
 #include "function.h"
 #include "expression.h"
 #include "context.h"
@@ -23,3 +25,4 @@ PolySet * readPolySetFromSTL( const Filename , int );
 
 PolySet * readPolySetFromDXF( const Filename , std::string , double , double , double , double , double , double , int );
 
+#endif
