@@ -15,7 +15,9 @@ public:
 	Grid3d<void*> grid;
 
 	bool is2d;
-	int convexity;
+        int convexity;
+        unsigned int layer;
+        unsigned int purpose;
 
 	PolySet();
 	~PolySet();

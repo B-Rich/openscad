@@ -54,6 +54,7 @@ public:
 
 	Value(bool v);
 	Value(double v);
+        Value(int v);
         Value(const std::string &t);
         Value(const Eigen::MatrixXd &m);
         // Value(const PolySet &ps);

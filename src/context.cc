@@ -195,7 +195,10 @@ void register_builtin(Context &ctx)
 	ctx.set_variable("$fs", Value(2.0));
 	ctx.set_variable("$fa", Value(12.0));
 	ctx.set_variable("$t", Value(0.0));
-	
+
+        ctx.set_variable("$layer", Value(0));
+        ctx.set_variable("$purpose", Value(0));
+
 	Value zero3;
 	zero3.type = Value::VECTOR;
 	zero3.append(new Value(0.0));

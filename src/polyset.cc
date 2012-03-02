@@ -40,7 +40,7 @@
 
  */
 
-PolySet::PolySet() : grid(GRID_FINE), is2d(false), convexity(1)
+PolySet::PolySet() : grid(GRID_FINE), is2d(false), convexity(1), layer(0), purpose(0)
 {
 }
 

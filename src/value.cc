@@ -58,6 +58,13 @@ Value::Value(double v)
 	this->num = v;
 }
 
+Value::Value(int v)
+{
+    reset_undef();
+    this->type = NUMBER;
+    this->num = (double) v;
+}
+
 Value::Value(const std::string &t)
 {
 	reset_undef();
