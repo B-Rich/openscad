@@ -70,6 +70,7 @@ using namespace boost::filesystem;
 #include <boost/assign/std/vector.hpp>
 using namespace boost::assign; // bring 'operator+=()' into scope
 #include "boosty.h"
+#include <boost/circular_buffer.hpp>
 
 
 PolySet * readPolySetFromImage( const Filename filename, bool center=false, double scale=1.0, int convexity=2 )
@@ -196,6 +197,279 @@ PolySet * readPolySetFromImage( const Filename filename, bool center=false, doub
         p->insert_vertex(ox + i, oy + lines-1, min_val);
     for (int i = lines-1; i > 0; i--)
         p->insert_vertex(ox + 0, oy + i, min_val);
+
+    return p;
+}
+
+PolySet * readPolySetFromRiseGroundBase( const Filename filename, bool center=false, double scale=1.0, int convexity=2 )
+{
+    handle_dep(filename);
+    PolySet *p = new PolySet();
+    p->convexity = convexity;
+
+    int lines = 0, columns = 0;
+    boost::unordered_map<std::pair<int,int>,double> rise_data;
+    boost::unordered_map<std::pair<int,int>,double> ground_data;
+    boost::unordered_map<std::pair<int,int>,double> base_data;
+
+    bool isImage;
+    Image image;
+    Blob blob;
+    try {
+        image.read( filename );
+        PRINTB("read: loaded image '%s'",filename );
+        isImage=true;
+    } catch( Exception &error_ ) {
+        PRINTB("read: %s",error_.what() );
+        isImage=false;
+    }
+
+    if(isImage) {
+        PRINTB("read: image '%s'; large images may crash OpenSCAD; use scale as needed.",filename);
+        lines = image.baseRows();
+        columns = image.baseColumns();
+        PRINTB("       : lines = %d",lines);
+        PRINTB("       : columns = %d",columns);
+        PRINTB("       : scale =  %d",scale);
+        image.scale(Geometry(scale*columns,scale*lines));
+        image.write( &blob );
+        image.read(blob);
+        lines = image.baseRows();
+        columns = image.baseColumns();
+        PRINTB("       : lines (scaled) = %d",lines);
+        PRINTB("       : columns (scaled) = %d",columns);
+        ColorRGB thisPixel;
+        for( int ix =0; ix<columns; ix++) {
+            for( int jy=0;jy<lines;jy++) {
+                thisPixel=image.pixelColor(ix,jy);
+                double rv=thisPixel.red();
+                double gv=thisPixel.green();
+                double bv=thisPixel.blue();
+                rise_data[std::make_pair(lines-jy-1,ix)]=rv;
+                ground_data[std::make_pair(lines-jy-1,ix)]=gv;
+                base_data[std::make_pair(lines-jy-1,ix)]=bv;
+            }
+        }
+    } else {
+        return NULL;
+    }
+
+    enum SurfaceType {
+        EMPTY,
+        OUTER,
+        SIDE,
+        BRIDGE,
+        INNER,
+        SURFACE
+    };
+
+
+    for(int iy=1; iy<lines; iy++) {
+         for(int jx=1; jx<columns; jx++) {
+           boost::circular_buffer< std::pair<int,int> > cb_pts(4);
+           boost::circular_buffer< std::pair<int,int> > cb_img(4);
+
+           boost::circular_buffer< double > cb_rv(4);
+           boost::circular_buffer< double > cb_gv(4);
+           boost::circular_buffer< double > cb_bv(4);
+
+           boost::circular_buffer< bool > cb_rvbv(4);
+
+           std::pair<int,int> tmp_pair;
+           double tmp_double;
+           bool tmp_bool;
+
+           cb_pts.push_back(std::make_pair(jx-1,iy-1));
+           cb_pts.push_back(std::make_pair(jx,iy-1));
+           cb_pts.push_back(std::make_pair(jx,iy));
+           cb_pts.push_back(std::make_pair(jx-1,iy));
+
+           cb_img.push_back(std::make_pair(iy-1,jx-1));
+           cb_img.push_back(std::make_pair(iy-1,jx));
+           cb_img.push_back(std::make_pair(iy,jx));
+           cb_img.push_back(std::make_pair(iy,jx-1));
+
+           for(int k=0;k<4;k++) {
+                cb_rv.push_back(rise_data[cb_img[k]]);
+                cb_gv.push_back(ground_data[cb_img[k]]);
+                cb_bv.push_back(base_data[cb_img[k]]);
+                cb_rvbv.push_back( (cb_rv[k]+cb_bv[0])>0 );
+           }
+
+           SurfaceType quadType=EMPTY;
+           quadType =     (cb_rvbv[0] && cb_rvbv[1] && cb_rvbv[2] && cb_rvbv[3]) ? SURFACE : quadType ;
+           quadType =     (!cb_rvbv[0] &&  cb_rvbv[1] && !cb_rvbv[2] &&  cb_rvbv[3])
+                       || ( cb_rvbv[0] && !cb_rvbv[1] &&  cb_rvbv[2] && !cb_rvbv[3]) ? BRIDGE : quadType;
+           quadType =     (!cb_rvbv[0] &&  cb_rvbv[1] &&  cb_rvbv[2] &&  cb_rvbv[3])
+                       || ( cb_rvbv[0] && !cb_rvbv[1] &&  cb_rvbv[2] &&  cb_rvbv[3])
+                       || ( cb_rvbv[0] &&  cb_rvbv[1] && !cb_rvbv[2] &&  cb_rvbv[3])
+                       || ( cb_rvbv[0] &&  cb_rvbv[1] &&  cb_rvbv[2] && !cb_rvbv[3]) ? INNER : quadType;
+           quadType =     ( cb_rvbv[0] &&  cb_rvbv[1] && !cb_rvbv[2] && !cb_rvbv[3])
+                       || (!cb_rvbv[0] &&  cb_rvbv[1] &&  cb_rvbv[2] && !cb_rvbv[3])
+                       || (!cb_rvbv[0] && !cb_rvbv[1] &&  cb_rvbv[2] &&  cb_rvbv[3])
+                       || ( cb_rvbv[0] && !cb_rvbv[1] && !cb_rvbv[2] &&  cb_rvbv[3]) ? SIDE : quadType;
+           quadType =     ( cb_rvbv[0] && !cb_rvbv[1] && !cb_rvbv[2] && !cb_rvbv[3])
+                       || (!cb_rvbv[0] &&  cb_rvbv[1] && !cb_rvbv[2] && !cb_rvbv[3])
+                       || (!cb_rvbv[0] && !cb_rvbv[1] &&  cb_rvbv[2] && !cb_rvbv[3])
+                       || (!cb_rvbv[0] && !cb_rvbv[1] && !cb_rvbv[2] &&  cb_rvbv[3]) ? OUTER : quadType;
+           switch( quadType ) {
+            case SURFACE :
+                // Top surface
+                p->append_poly();
+                for(int k=0;k<4;k++) {
+                   p->append_vertex(cb_pts[k].first,cb_pts[k].second,cb_gv[k]+cb_rv[k]);
+                }
+                // Bottom surface;
+                p->append_poly();
+                for(int k=3;k>=0;k--) {
+                    p->append_vertex(cb_pts[k].first,cb_pts[k].second,cb_gv[k]-cb_bv[k]);
+                }
+                break;
+            case INNER :
+               /***  Inner Corner Case:
+                (0,1)-\-(1,1)
+                  | X X \ |
+                  |X X X X\
+                  | X X X |
+                (0,0)---(1,0)
+                ***/
+               // Rotate until !cb_rvbv[2]
+               while( cb_rvbv[2] ) {
+                   tmp_pair=cb_pts[0];
+                   cb_pts.push_back(tmp_pair);
+                   tmp_double=cb_rv[0];
+                   cb_rv.push_back(tmp_double);
+                   tmp_double=cb_gv[0];
+                   cb_gv.push_back(tmp_double);
+                   tmp_double=cb_bv[0];
+                   cb_bv.push_back(tmp_double);
+                   tmp_bool=cb_rvbv[0];
+                   cb_rvbv.push_back(tmp_bool);
+               }
+               p->append_poly();
+               // Top surface
+               p->append_poly();
+               p->append_vertex(cb_pts[0].first,cb_pts[0].second,cb_gv[0]+cb_rv[0]);
+               p->append_vertex(cb_pts[1].first,cb_pts[1].second,cb_gv[1]+cb_rv[1]);
+               p->append_vertex( cb_pts[1].first+(cb_pts[2].first-cb_pts[1].first)/2 ,cb_pts[1].second+(cb_pts[2].second-cb_pts[1].second)/2 ,cb_gv[1]);
+               p->append_vertex( cb_pts[2].first+(cb_pts[3].first-cb_pts[2].first)/2 ,cb_pts[2].second+(cb_pts[3].second-cb_pts[2].second)/2 ,cb_gv[2]);
+               p->append_vertex(cb_pts[3].first,cb_pts[3].second,cb_gv[3]+cb_rv[3]);
+               // Bottom surface
+               p->append_poly();
+               p->append_vertex(cb_pts[0].first,cb_pts[0].second,cb_gv[0]-cb_bv[0]);
+               p->append_vertex(cb_pts[3].first,cb_pts[3].second,cb_gv[3]-cb_bv[3]);
+               p->append_vertex( cb_pts[3].first+(cb_pts[2].first-cb_pts[3].first)/2 ,cb_pts[3].second+(cb_pts[2].second-cb_pts[3].second)/2 ,cb_gv[2]);
+               p->append_vertex( cb_pts[2].first+(cb_pts[1].first-cb_pts[2].first)/2 ,cb_pts[2].second+(cb_pts[1].second-cb_pts[2].second)/2 ,cb_gv[1]);
+               p->append_vertex(cb_pts[1].first,cb_pts[1].second,cb_gv[1]-cb_bv[1]);
+               break;
+            case BRIDGE :
+               /*** Diagonal Bridge Case:
+                (0,1)-/-(1,1)
+                  | / X X |
+                  /X X X X/
+                  | X X / |
+                (0,0)-/-(1,0)
+                 ***/
+               if( !cb_rvbv[0] ) {
+                   tmp_pair=cb_pts[0];
+                   cb_pts.push_back(tmp_pair);
+                   tmp_double=cb_rv[0];
+                   cb_rv.push_back(tmp_double);
+                   tmp_double=cb_gv[0];
+                   cb_gv.push_back(tmp_double);
+                   tmp_double=cb_bv[0];
+                   cb_bv.push_back(tmp_double);
+                   tmp_bool=cb_rvbv[0];
+                   cb_rvbv.push_back(tmp_bool);
+               }
+               p->append_poly();
+               // Top surface
+               p->append_poly();
+               for(int k=0;k<2;k+=2) {
+                 p->append_vertex(cb_pts[k].first,cb_pts[k].second,cb_gv[k]+cb_rv[k]);
+                 p->append_vertex( cb_pts[k].first+(cb_pts[k+1].first-cb_pts[k].first)/2 ,cb_pts[k].second+(cb_pts[k+1].second-cb_pts[k].second)/2 ,cb_gv[k]);
+                 p->append_vertex( cb_pts[k+1].first+(cb_pts[k+2].first-cb_pts[k+1].first)/2 ,cb_pts[k+1].second+(cb_pts[k+2].second-cb_pts[k+1].second)/2 ,cb_gv[k+1]);
+               }
+               // Bottom surface
+               p->append_poly();
+               p->append_vertex( cb_pts[0].first+(cb_pts[3].first-cb_pts[0].first)/2 ,cb_pts[0].second+(cb_pts[3].second-cb_pts[0].second)/2 ,cb_gv[0]);
+               p->append_vertex( cb_pts[2].first+(cb_pts[2].first-cb_pts[3].first)/2 ,cb_pts[2].second+(cb_pts[2].second-cb_pts[3].second)/2 ,cb_gv[2]);
+               p->append_vertex( cb_pts[2].first,cb_pts[2].second,cb_gv[2]-cb_rv[2]);
+               p->append_vertex( cb_pts[2].first+(cb_pts[1].first-cb_pts[2].first)/2 ,cb_pts[2].second+(cb_pts[1].second-cb_pts[2].second)/2 ,cb_gv[2]);
+               p->append_vertex( cb_pts[1].first+(cb_pts[0].first-cb_pts[1].first)/2 ,cb_pts[1].second+(cb_pts[0].second-cb_pts[1].second)/2 ,cb_gv[0]);
+               p->append_vertex( cb_pts[0].first,cb_pts[0].second,cb_gv[0]-cb_rv[0]);
+               break;
+            case SIDE :
+               /*** Side Case:
+                (0,1)-|-(1,1)
+                  |   |XXX|
+                  |   |XXX|
+                  |   |XXx|
+                (0,0)-|-(1,0)
+                 ***/
+               while( !(cb_rvbv[1] && cb_rvbv[2]) ) {
+                   tmp_pair=cb_pts[0];
+                   cb_pts.push_back(tmp_pair);
+                   tmp_double=cb_rv[0];
+                   cb_rv.push_back(tmp_double);
+                   tmp_double=cb_gv[0];
+                   cb_gv.push_back(tmp_double);
+                   tmp_double=cb_bv[0];
+                   cb_bv.push_back(tmp_double);
+                   tmp_bool=cb_rvbv[0];
+                   cb_rvbv.push_back(tmp_bool);
+               }
+               // Top surface
+               p->append_poly();
+               p->append_vertex(cb_pts[0].first+(cb_pts[1].first-cb_pts[0].first)/2 ,cb_pts[0].second+(cb_pts[1].second-cb_pts[0].second)/2 ,cb_gv[0]);
+               p->append_vertex(cb_pts[1].first,cb_pts[1].second,cb_gv[1]+cb_rv[1]);
+               p->append_vertex(cb_pts[2].first,cb_pts[2].second,cb_gv[2]+cb_rv[2]);
+               p->append_vertex(cb_pts[2].first+(cb_pts[3].first-cb_pts[2].first)/2 ,cb_pts[2].second+(cb_pts[3].second-cb_pts[2].second)/2 ,cb_gv[2]);
+               // Bottom surface
+               p->append_poly();
+               p->append_vertex(cb_pts[3].first+(cb_pts[2].first-cb_pts[3].first)/2 ,cb_pts[3].second+(cb_pts[2].second-cb_pts[3].second)/2 ,cb_gv[2]);
+               p->append_vertex(cb_pts[2].first,cb_pts[2].second,cb_gv[2]+cb_rv[2]);
+               p->append_vertex(cb_pts[1].first,cb_pts[1].second,cb_gv[1]+cb_rv[1]);
+               p->append_vertex(cb_pts[1].first+(cb_pts[0].first-cb_pts[1].first)/2 ,cb_pts[1].second+(cb_pts[0].second-cb_pts[1].second)/2 ,cb_gv[0]);
+               break;
+            case OUTER :
+               /***  Outer Corner Case:
+                (0,1)---(1,1)
+                  |       |
+                  \       |
+                  |X\     |
+                (0,0)-\-(1,0)
+                ***/
+               // Rotate until cb_rvbv[0]
+               while( !cb_rvbv[0] ) {
+                   tmp_pair=cb_pts[0];
+                   cb_pts.push_back(tmp_pair);
+                   tmp_double=cb_rv[0];
+                   cb_rv.push_back(tmp_double);
+                   tmp_double=cb_gv[0];
+                   cb_gv.push_back(tmp_double);
+                   tmp_double=cb_bv[0];
+                   cb_bv.push_back(tmp_double);
+                   tmp_bool=cb_rvbv[0];
+                   cb_rvbv.push_back(tmp_bool);
+               }
+               p->append_poly();
+               // Top surface
+               p->append_poly();
+               p->append_vertex(cb_pts[0].first,cb_pts[0].second,cb_gv[0]+cb_rv[0]);
+               p->append_vertex(cb_pts[0].first+(cb_pts[1].first-cb_pts[0].first)/2 ,cb_pts[0].second+(cb_pts[1].second-cb_pts[0].second)/2 ,cb_gv[0]);
+               p->append_vertex(cb_pts[3].first+(cb_pts[0].first-cb_pts[3].first)/2 ,cb_pts[3].second+(cb_pts[0].second-cb_pts[3].second)/2 ,cb_gv[0]);
+               // Bottom surface
+               p->append_poly();
+               p->append_vertex(cb_pts[0].first,cb_pts[0].second,cb_gv[0]+cb_rv[0]);
+               p->append_vertex(cb_pts[3].first+(cb_pts[3].first-cb_pts[0].first)/2 ,cb_pts[3].second+(cb_pts[3].second-cb_pts[0].second)/2 ,cb_gv[0]);
+               p->append_vertex(cb_pts[0].first+(cb_pts[0].first-cb_pts[1].first)/2 ,cb_pts[0].second+(cb_pts[0].second-cb_pts[1].second)/2 ,cb_gv[0]);
+               break;
+            case EMPTY :
+               break;
+           }
+         }
+    }
 
     return p;
 }

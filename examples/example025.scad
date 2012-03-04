@@ -1,6 +1,6 @@
 // example025 rendering an image via surface.
 
-render_obj=5;
+render_obj=7;
 
 if(render_obj==1) {
   intersection()
@@ -46,4 +46,11 @@ if(render_obj==5) {
 
 if(render_obj==6) {
   polyset(data=read_dxf("example008.dxf","G"),convexity=2);
+}
+
+tmp_rgb=read_rgb();
+if(render_obj==7) assign(readImg=read_rgb("example025_10x10.png")) {
+  polyset(data=readImg,convexity=2);
+  echo(str("read_rgb: ",readImg));
+  cube();
 }

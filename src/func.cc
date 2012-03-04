@@ -608,6 +608,38 @@ Value builtin_read_image(const Context *, const std::vector<std::string>&, const
     return returnPoly;
 }
 
+Value builtin_read_rgb(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
+{
+    double center=false;
+    double scale=1.0;
+    int convexity = 2;
+    if(args.size() ==0 || args[0].type != Value::STRING ) {
+        PRINT( "Usage: read_rgb(file_name[,center[,scale[,convexity]]])" );
+        PRINT( "  Defaults:");
+        PRINTB("            center : %s",center);
+        PRINTB("            scale  : %s",scale);
+        return Value();
+    }
+    Value fname=args[0];
+    Filename filename=fname.text;
+    Value returnPoly;
+    returnPoly.type = Value::POLYSET;
+    if ( args.size() >3 && args[3].type == Value::NUMBER ) {
+        convexity = args[3].num;
+    }
+
+    if ( args.size() >1 && args[1].type == Value::BOOL ) {
+        center = args[1].b;
+    }
+
+    if ( args.size() >2 && args[2].type == Value::NUMBER ) {
+        scale = args[2].num;
+    }
+    PolySet *p = readPolySetFromRiseGroundBase( filename, center, scale, convexity );
+    returnPoly.poly=p;
+    return returnPoly;
+}
+
 Value builtin_read_stl(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
 {
     int convexity = 2;
@@ -703,6 +735,7 @@ void register_builtin_functions()
         Builtins::init("identity", new BuiltinFunction(&builtin_identity));
         Builtins::init("read_dxf", new BuiltinFunction(&builtin_read_dxf));
         Builtins::init("read_image", new BuiltinFunction(&builtin_read_image));
+        Builtins::init("read_rgb", new BuiltinFunction(&builtin_read_rgb));
         Builtins::init("read_stl", new BuiltinFunction(&builtin_read_stl));
         Builtins::init("version", new BuiltinFunction(&builtin_version));
 	Builtins::init("version_num", new BuiltinFunction(&builtin_version_num));

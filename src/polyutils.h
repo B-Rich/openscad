@@ -19,7 +19,11 @@
 
 using namespace Magick;
 
+
+
 PolySet * readPolySetFromImage( const Filename, bool, double, int );
+
+PolySet * readPolySetFromRiseGroundBase( const Filename, bool, double, int );
 
 PolySet * readPolySetFromSTL( const Filename , int );
 
