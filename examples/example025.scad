@@ -52,5 +52,5 @@ tmp_rgb=read_rgb();
 if(render_obj==7) assign(readImg=read_rgb("example025_10x10.png")) {
   polyset(data=readImg,convexity=2);
   echo(str("read_rgb: ",readImg));
-  cube();
+  translate([-2,-2,0]) cube();
 }
