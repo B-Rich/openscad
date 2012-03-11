@@ -348,6 +348,19 @@ build_pcl()
   make install
 }
 
+build_mandoline()
+{
+  version=$1
+  echo "Building Mandoline-" $version "..."
+  cd $BASEDIR/src
+  rm -rf Mandoline
+  git clone https://github.com/revarbat/Mandoline.git
+  cd Mandoline
+  ./configure --prefix=$DEPLOYDIR
+  make -j4
+  make install
+}
+
 
 if [ ! -f $OPENSCADDIR/openscad.pro ]; then
   echo "Must be run from the OpenSCAD source root directory"
@@ -376,3 +389,4 @@ build_opencsg 1.3.2
 # Install flann via macports for all dependencies for now.
 # build_flann 1.7.1
 # build_pcl 1.5.1
+build_mandoline git

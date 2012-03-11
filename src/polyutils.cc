@@ -72,6 +72,7 @@ using namespace boost::assign; // bring 'operator+=()' into scope
 #include "boosty.h"
 #include <boost/circular_buffer.hpp>
 
+#include <BGLMesh3d.hh>
 
 PolySet * readPolySetFromImage( const Filename filename, bool center=false, double scale=1.0, int convexity=2 )
 {
@@ -487,6 +488,21 @@ PolySet * readPolySetFromRiseGroundBase( const Filename filename, bool center=fa
     }
 
     return p;
+}
+
+BGL::Mesh3d * readMesh3dFromSTL( const Filename filename)
+{
+    int facecount=0;
+    BGL::Mesh3d *m = NULL;
+    handle_dep(filename);
+    std::ifstream f(filename.c_str(), std::ios::in | std::ios::binary);
+    if (!f.good()) {
+        PRINTB("WARNING: Can't open import file '%s'.", filename);
+        return m;
+    }
+    m = new BGL::Mesh3d();
+    facecount=m->loadFromSTLFile(filename.c_str());
+    return m;
 }
 
 PolySet * readPolySetFromSTL( const Filename filename, int convexity)

@@ -28,6 +28,8 @@
 #include "linalg.h"
 #include <Eigen/LU>
 #include <boost/foreach.hpp>
+#include <BGLTriangle3d.hh>
+#include <BGLPoint3d.hh>
 
 /*! /class PolySet
 
@@ -43,6 +45,20 @@
 PolySet::PolySet() : grid(GRID_FINE), is2d(false), convexity(1), layer(0), purpose(0)
 {
 }
+
+PolySet::PolySet(BGL::Mesh3d * m)  : grid(GRID_FINE), is2d(false), convexity(1), layer(0), purpose(0) {
+    BGL::Triangles3d::iterator it = m->triangles.begin();
+    for ( ; it != m->triangles.end(); it++ ) {
+        append_poly();
+        BGL::Point3d &pt1 = it->vertex1;
+        BGL::Point3d &pt2 = it->vertex2;
+        BGL::Point3d &pt3 = it->vertex3;
+        append_vertex(pt1.x,pt1.y,pt1.z);
+        append_vertex(pt2.x,pt2.y,pt2.z);
+        append_vertex(pt3.x,pt3.y,pt3.z);
+    }
+}
+
 
 PolySet::~PolySet()
 {

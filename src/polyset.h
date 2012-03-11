@@ -5,6 +5,7 @@
 #include "grid.h"
 #include "linalg.h"
 #include <vector>
+#include <BGLMesh3d.hh>
 
 class PolySet
 {
@@ -19,7 +20,8 @@ public:
         unsigned int layer;
         unsigned int purpose;
 
-	PolySet();
+        PolySet();
+        PolySet(BGL::Mesh3d * m);
 	~PolySet();
 
 	bool empty() const { return polygons.size() == 0; }

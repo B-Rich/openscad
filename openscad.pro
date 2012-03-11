@@ -114,6 +114,7 @@ CONFIG += boost
 CONFIG += eigen2
 # CONFIG += eigen3
 CONFIG += imagemagick
+CONFIG += bgl
 
 #Uncomment the following line to enable QCodeEdit
 #CONFIG += qcodeedit
