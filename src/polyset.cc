@@ -28,8 +28,12 @@
 #include "linalg.h"
 #include <Eigen/LU>
 #include <boost/foreach.hpp>
+#include <BGLMesh3d.hh>
 #include <BGLTriangle3d.hh>
 #include <BGLPoint3d.hh>
+#include <BGLCompoundRegion.hh>
+#include <BGLLine.hh>
+#include <BGLPoint.hh>
 
 /*! /class PolySet
 
@@ -46,7 +50,7 @@ PolySet::PolySet() : grid(GRID_FINE), is2d(false), convexity(1), layer(0), purpo
 {
 }
 
-PolySet::PolySet(BGL::Mesh3d * m)  : grid(GRID_FINE), is2d(false), convexity(1), layer(0), purpose(0) {
+PolySet::PolySet(BGL::Mesh3d * m )  : grid(GRID_FINE), is2d(false), convexity(1), layer(0), purpose(0) {
     BGL::Triangles3d::iterator it = m->triangles.begin();
     for ( ; it != m->triangles.end(); it++ ) {
         append_poly();
@@ -59,6 +63,25 @@ PolySet::PolySet(BGL::Mesh3d * m)  : grid(GRID_FINE), is2d(false), convexity(1),
     }
 }
 
+PolySet::PolySet(BGL::CompoundRegion cr )  : grid(GRID_FINE), is2d(true), convexity(5), layer(0), purpose(0) {
+    BGL::SimpleRegions::iterator rit ;
+    // is2d = true;
+    for (rit = cr.subregions.begin() ; rit != cr.subregions.end(); rit++ ) {
+        BGL::Paths::iterator it;
+        for ( it = rit->subpaths.begin(); it != rit->subpaths.end(); it++) {
+            BGL::Lines::iterator lit;
+            append_poly();
+            for ( lit = it->segments.begin(); lit != it->segments.end(); lit++) {
+                BGL::Point pt1=lit->startPt;
+                append_vertex(pt1.x,pt1.y);
+                // BGL::Point pt2=lit->endPt;
+                //BGL::Line line=lit;
+            }
+            // BGL::Point pt2=it->segments.end()->endPt;
+            // append_vertex(pt2.x,pt2.y);
+        }
+    }
+}
 
 PolySet::~PolySet()
 {
@@ -292,4 +315,19 @@ size_t PolySet::memsize() const
 	mem += this->grid.db.size() * (3 * sizeof(int64_t) + sizeof(void*)) + sizeof(Grid3d<void*>);
 	mem += sizeof(PolySet);
 	return mem;
+}
+
+BGL::Mesh3d * PolySet::toMesh3d() {
+    BGL::Mesh3d * m=new BGL::Mesh3d();
+    for( size_t i=0; i < polygons.size(); i++) {
+        const Polygon *poly = &polygons[i];
+        if(poly->size() == 3) {
+            BGL::Point3d pt1(poly->at(0)[0],poly->at(0)[2],poly->at(0)[3]);
+            BGL::Point3d pt2(poly->at(1)[0],poly->at(1)[2],poly->at(1)[3]);
+            BGL::Point3d pt3(poly->at(2)[0],poly->at(2)[2],poly->at(2)[3]);
+            m->triangles.push_back(BGL::Triangle3d(pt1,pt2,pt3));
+        }
+    }
+    m->recalculateBounds();
+    return m;
 }

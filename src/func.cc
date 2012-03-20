@@ -39,6 +39,7 @@
 #include <Magick++.h>
 #include "polyutils.h"
 #include <string>
+#include <BGLCompoundRegion.hh>
 
 using namespace Magick;
 
@@ -659,6 +660,41 @@ Value builtin_read_stl(const Context *, const std::vector<std::string>&, const s
     return returnPoly;
 }
 
+Value builtin_slice_stl(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
+{
+    int convexity = 2;
+    float thickness = 0.1;
+    if(args.size() ==0 || args[0].type != Value::STRING ) {
+        PRINT( "Usage: slice_stl(file_name,thick[,convexity])" );
+        return Value();
+    }
+    Value fname=args[0];
+    Filename filename=fname.text;
+    Value returnPoly;
+    returnPoly.type = Value::POLYSET;
+    Value returnValue;
+    returnValue.type = Value::VECTOR;
+    if ( args.size() >1 && args[1].type == Value::NUMBER ) {
+        thickness = args[1].num;
+    }
+    if ( args.size() >2 && args[2].type == Value::NUMBER ) {
+        convexity = args[2].num;
+    }
+    BGL::Mesh3d *m = readMesh3dFromSTL( filename );
+    int numSlices = floor( (m->maxZ-m->minZ)/thickness );
+    for (int i=0; i<numSlices; i++ ) {
+        BGL::CompoundRegion cr ;
+        double dz=m->minZ+i*thickness+thickness/2.0;
+        PRINTB("  builtin_slice_stl: z=%f",dz);
+        m->regionForSliceAtZ(dz,cr);
+        PolySet * ps=new PolySet(cr);
+        returnValue.append(new Value(ps));
+    }
+    m->rotateZ(90.0);
+    returnPoly.poly=new PolySet(m);
+    return returnValue;
+}
+
 Value builtin_fetch(const Context *, const std::vector<std::string>&, const std::vector<Value> &args)
 {
     if(args.size()<2 || args[0].type != Value::STRING || args[1].type != Value::STRING) {
@@ -737,6 +773,7 @@ void register_builtin_functions()
         Builtins::init("read_image", new BuiltinFunction(&builtin_read_image));
         Builtins::init("read_rgb", new BuiltinFunction(&builtin_read_rgb));
         Builtins::init("read_stl", new BuiltinFunction(&builtin_read_stl));
+        Builtins::init("slice_stl", new BuiltinFunction(&builtin_slice_stl));
         Builtins::init("version", new BuiltinFunction(&builtin_version));
 	Builtins::init("version_num", new BuiltinFunction(&builtin_version_num));
 }

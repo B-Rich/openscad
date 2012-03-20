@@ -505,6 +505,12 @@ BGL::Mesh3d * readMesh3dFromSTL( const Filename filename)
     return m;
 }
 
+PolySet * createPolySetFromMesh3d( BGL::Mesh3d * m)
+{
+    PolySet *p = new PolySet(m);
+    return p;
+}
+
 PolySet * readPolySetFromSTL( const Filename filename, int convexity)
 {
 	PolySet *p = NULL;

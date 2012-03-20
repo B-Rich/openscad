@@ -57,7 +57,7 @@ public:
         Value(int v);
         Value(const std::string &t);
         Value(const Eigen::MatrixXd &m);
-        // Value(const PolySet &ps);
+        Value(PolySet *ps);
 
 	Value(const Value &v);
 	Value& operator = (const Value &v);

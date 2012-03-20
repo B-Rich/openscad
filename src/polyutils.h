@@ -16,6 +16,7 @@
 #include "handle_dep.h"
 #include <Magick++.h>
 #include <string>
+#include <BGLMesh3d.hh>
 
 using namespace Magick;
 
@@ -24,6 +25,10 @@ using namespace Magick;
 PolySet * readPolySetFromImage( const Filename, bool, double, int );
 
 PolySet * readPolySetFromRiseGroundBase( const Filename, bool, double, int );
+
+BGL::Mesh3d * readMesh3dFromSTL( const Filename );
+
+PolySet * createPolySetFromMesh3d( BGL::Mesh3d * );
 
 PolySet * readPolySetFromSTL( const Filename , int );
 

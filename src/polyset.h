@@ -6,6 +6,7 @@
 #include "linalg.h"
 #include <vector>
 #include <BGLMesh3d.hh>
+#include <BGLCompoundRegion.hh>
 
 class PolySet
 {
@@ -21,8 +22,9 @@ public:
         unsigned int purpose;
 
         PolySet();
-        PolySet(BGL::Mesh3d * m);
-	~PolySet();
+        PolySet(BGL::Mesh3d * );
+        PolySet(BGL::CompoundRegion );
+    ~PolySet();
 
 	bool empty() const { return polygons.size() == 0; }
 	void append_poly();
@@ -43,7 +45,8 @@ public:
 	};
 
 	void render_surface(csgmode_e csgmode, const Transform3d &m, GLint *shaderinfo = NULL) const;
-	void render_edges(csgmode_e csgmode) const;
+        void render_edges(csgmode_e csgmode) const;
+        BGL::Mesh3d * toMesh3d();
 };
 
 #endif

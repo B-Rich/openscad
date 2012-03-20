@@ -79,12 +79,12 @@ Value::Value(const Eigen::MatrixXd &m)
     this->matrix = m;
 }
 
-//Value::Value(const PolySet &ps)
-//{
-//    reset_undef();
-//    this->type = POLYSET;
-//    this->poly= &ps;
-//}
+Value::Value(PolySet *ps)
+{
+    reset_undef();
+    this->type = POLYSET;
+    this->poly= ps;
+}
 
 Value::Value(const Value &v)
 {

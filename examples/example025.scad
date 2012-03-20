@@ -1,6 +1,6 @@
 // example025 rendering an image via surface.
 
-render_obj=7;
+render_obj=8;
 
 if(render_obj==1) {
   intersection()
@@ -29,6 +29,8 @@ if(render_obj==3) {
 tmp_image=read_image();
 tmp_dxf=read_dxf();
 tmp_stl=read_stl();
+tmp_slice=slice_stl();
+
 
 if(render_obj==4) assign(readImg=read_image("example025.png",true,0.5) ) {
   echo(str("Number of polygons: ",len(readImg)));
@@ -53,4 +55,13 @@ if(render_obj==7) assign(readImg=read_rgb("example025_10x10.png")) {
   polyset(data=readImg,convexity=2);
   echo(str("read_rgb: ",readImg));
   translate([-2,-2,0]) cube();
+}
+
+if(render_obj==8) assign( readSlices=slice_stl("example012.stl",0.1) ) {
+  echo( str("Number of slices: ",len(readSlices) ) );
+  for( i=[0:len(readSlices)-1] ) {
+    echo( str("  Length of slice ",i,": ",len(readSlices[i]) ) );
+  }
+  polyset(data=readSlices[50]);
+  // translate([-2,-2,0]) cube();
 }
