@@ -116,15 +116,7 @@ mingw* {
 }
 
 CONFIG += qt
-QT += opengl concurrent
-
-# see http://fedoraproject.org/wiki/UnderstandingDSOLinkChange
-# and https://github.com/openscad/openscad/pull/119
-# ( QT += opengl does not automatically link glu on some DSO systems. )
-unix:!macx {
-  QMAKE_LIBS_OPENGL *= -lGLU
-  QMAKE_LIBS_OPENGL *= -lX11
-}
+QT += widgets concurrent
 
 netbsd* {
    QMAKE_LFLAGS += -L/usr/X11R7/lib
@@ -179,6 +171,7 @@ macx:CONFIG += mdi
 #CONFIG += c++11
 CONFIG += cgal
 CONFIG += opencsg
+CONFIG += glew
 CONFIG += boost
 CONFIG += eigen
 CONFIG += glib-2.0
@@ -188,11 +181,17 @@ CONFIG += fontconfig
 CONFIG += gettext
 
 #Uncomment the following line to enable the QScintilla editor
-CONFIG += scintilla
+!nogui {
+  CONFIG += scintilla
+}
 
 # Make experimental features available
 experimental {
   DEFINES += ENABLE_EXPERIMENTAL
+}
+
+nogui {
+  DEFINES += OPENSCAD_NOGUI
 }
 
 mdi {
@@ -202,7 +201,7 @@ mdi {
 include(common.pri)
 
 # mingw has to come after other items so OBJECT_DIRS will work properly
-CONFIG(mingw-cross-env) {
+CONFIG(mingw-cross-env)|CONFIG(mingw-cross-env-shared) {
   include(mingw-cross-env.pri)
 }
 
@@ -254,8 +253,9 @@ HEADERS += src/typedefs.h \
            src/context.h \
            src/modcontext.h \
            src/evalcontext.h \
-           src/csgterm.h \
-           src/csgtermnormalizer.h \
+           src/csgops.h \
+           src/CSGTreeNormalizer.h \
+           src/CSGTreeEvaluator.h \
            src/dxfdata.h \
            src/dxfdim.h \
            src/export.h \
@@ -301,7 +301,6 @@ HEADERS += src/typedefs.h \
            src/ModuleCache.h \
            src/GeometryCache.h \
            src/GeometryEvaluator.h \
-           src/CSGTermEvaluator.h \
            src/Tree.h \
 src/DrawingCallback.h \
 src/FreetypeRenderer.h \
@@ -348,8 +347,9 @@ SOURCES += src/version_check.cc \
            src/context.cc \
            src/modcontext.cc \
            src/evalcontext.cc \
-           src/csgterm.cc \
-           src/csgtermnormalizer.cc \
+           src/csgnode.cc \
+           src/CSGTreeNormalizer.cc \
+           src/CSGTreeEvaluator.cc \
            src/Geometry.cc \
            src/Polygon2d.cc \
            src/clipper-utils.cc \
@@ -405,12 +405,17 @@ SOURCES += src/version_check.cc \
            src/builtin.cc \
            src/calc.cc \
            src/export.cc \
+           src/export_stl.cc \
+           src/export_amf.cc \
+           src/export_off.cc \
+           src/export_dxf.cc \
+           src/export_svg.cc \
+           src/export_nef.cc \
            src/export_png.cc \
            src/import.cc \
            src/renderer.cc \
            src/colormap.cc \
            src/ThrownTogetherRenderer.cc \
-           src/CSGTermEvaluator.cc \
            src/svg.cc \
            src/OffscreenView.cc \
            src/fbo.cc \
@@ -482,6 +487,8 @@ HEADERS += src/cgal.h \
            src/Polygon2d-CGAL.h
 
 SOURCES += src/cgalutils.cc \
+           src/cgalutils-applyops.cc \
+           src/cgalutils-project.cc \
            src/cgalutils-tess.cc \
            src/cgalutils-polyhedron.cc \
            src/CGALCache.cc \

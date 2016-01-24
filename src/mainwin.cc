@@ -34,7 +34,7 @@
 #include "printutils.h"
 #include "node.h"
 #include "polyset.h"
-#include "csgterm.h"
+#include "csgnode.h"
 #include "highlighter.h"
 #include "export.h"
 #include "builtin.h"
@@ -51,13 +51,13 @@
 #include "FontListDialog.h"
 #include "LibraryInfoDialog.h"
 #ifdef ENABLE_OPENCSG
-#include "CSGTermEvaluator.h"
+#include "CSGTreeEvaluator.h"
 #include "OpenCSGRenderer.h"
 #include <opencsg.h>
 #endif
 #include "ProgressWidget.h"
 #include "ThrownTogetherRenderer.h"
-#include "csgtermnormalizer.h"
+#include "CSGTreeNormalizer.h"
 #include "QGLView.h"
 #ifdef Q_OS_MAC
 #include "CocoaUtils.h"
@@ -92,6 +92,16 @@
 #include <QDockWidget>
 #include <QClipboard>
 #include <QDesktopWidget>
+
+#if (QT_VERSION < QT_VERSION_CHECK(5, 1, 0))
+// Set dummy for Qt versions that do not have QSaveFile
+#define QT_FILE_SAVE_CLASS QFile
+#define QT_FILE_SAVE_COMMIT true
+#else
+#include <QSaveFile>
+#define QT_FILE_SAVE_CLASS QSaveFile
+#define QT_FILE_SAVE_COMMIT if (saveOk) { saveOk = file.commit(); } else { file.cancelWriting(); }
+#endif
 
 #include <fstream>
 
@@ -208,6 +218,7 @@ MainWindow::MainWindow(const QString &filename)
 		Preferences::inst()->fireEditorConfigChanged();
 	}
 #endif
+	connect(editor, SIGNAL(previewRequest()), this, SLOT(actionRenderPreview()));
 
 	editorDockContents->layout()->addWidget(editor);
 
@@ -230,7 +241,6 @@ MainWindow::MainWindow(const QString &filename)
 
 	root_module = NULL;
 	absolute_root_node = NULL;
-	this->root_chain = NULL;
 #ifdef ENABLE_CGAL
 	this->cgalRenderer = NULL;
 #endif
@@ -239,13 +249,13 @@ MainWindow::MainWindow(const QString &filename)
 #endif
 	this->thrownTogetherRenderer = NULL;
 
-	highlights_chain = NULL;
-	background_chain = NULL;
 	root_node = NULL;
 
-	tval = 0;
-	fps = 0;
-	fsteps = 1;
+	this->anim_step = 0;
+	this->anim_numsteps = 0;
+	this->anim_tval = 0.0;
+	this->anim_dumping = false;
+	this->anim_dump_start_step = 0;
 
 	const QString importStatement = "import(\"%1\");\n";
 	const QString surfaceStatement = "surface(\"%1\");\n";
@@ -279,8 +289,10 @@ MainWindow::MainWindow(const QString &filename)
 	waitAfterReloadTimer->setInterval(200);
 	connect(waitAfterReloadTimer, SIGNAL(timeout()), this, SLOT(waitAfterReload()));
 
-	connect(this->e_tval, SIGNAL(textChanged(QString)), this, SLOT(actionRenderPreview()));
-	connect(this->e_fps, SIGNAL(textChanged(QString)), this, SLOT(updatedFps()));
+	connect(this->e_tval, SIGNAL(textChanged(QString)), this, SLOT(updatedAnimTval()));
+	connect(this->e_fps, SIGNAL(textChanged(QString)), this, SLOT(updatedAnimFps()));
+	connect(this->e_fsteps, SIGNAL(textChanged(QString)), this, SLOT(updatedAnimSteps()));
+	connect(this->e_dump, SIGNAL(toggled(bool)), this, SLOT(updatedAnimDump(bool)));
 
 	animate_panel->hide();
 	find_panel->hide();
@@ -322,9 +334,11 @@ MainWindow::MainWindow(const QString &filename)
 	// Edit menu
 	connect(this->editActionUndo, SIGNAL(triggered()), editor, SLOT(undo()));
 	connect(this->editActionRedo, SIGNAL(triggered()), editor, SLOT(redo()));
+	connect(this->editActionRedo_2, SIGNAL(triggered()), editor, SLOT(redo()));
 	connect(this->editActionCut, SIGNAL(triggered()), editor, SLOT(cut()));
 	connect(this->editActionCopy, SIGNAL(triggered()), editor, SLOT(copy()));
 	connect(this->editActionPaste, SIGNAL(triggered()), editor, SLOT(paste()));
+	connect(this->editActionCopyViewport, SIGNAL(triggered()), this, SLOT(actionCopyViewport()));
 	connect(this->editActionIndent, SIGNAL(triggered()), editor, SLOT(indentSelection()));
 	connect(this->editActionUnindent, SIGNAL(triggered()), editor, SLOT(unindentSelection()));
 	connect(this->editActionComment, SIGNAL(triggered()), editor, SLOT(commentSelection()));
@@ -680,7 +694,6 @@ MainWindow::~MainWindow()
 {
 	if (root_module) delete root_module;
 	if (root_node) delete root_node;
-	if (root_chain) delete root_chain;
 #ifdef ENABLE_CGAL
 	this->root_geom.reset();
 	delete this->cgalRenderer;
@@ -814,33 +827,68 @@ void MainWindow::updateRecentFiles()
 	}
 }
 
-void MainWindow::updatedFps()
+void MainWindow::updatedAnimTval()
+{
+	bool t_ok;
+	double t = this->e_tval->text().toDouble(&t_ok);
+	// Clamp t to 0-1
+	if (t_ok) {
+		this->anim_tval = t < 0 ? 0.0 : ((t > 1.0) ? 1.0 : t);
+	}
+	else {
+		this->anim_tval = 0.0;
+	}
+	actionRenderPreview();
+}
+
+void MainWindow::updatedAnimFps()
 {
 	bool fps_ok;
 	double fps = this->e_fps->text().toDouble(&fps_ok);
 	animate_timer->stop();
-	if (fps_ok && fps > 0) {
+	if (fps_ok && fps > 0 && this->anim_numsteps > 0) {
+		this->anim_step = int(this->anim_tval * this->anim_numsteps) % this->anim_numsteps;
 		animate_timer->setSingleShot(false);
-		animate_timer->setInterval(int(1000 / this->e_fps->text().toDouble()));
+		animate_timer->setInterval(int(1000 / fps));
 		animate_timer->start();
 	}
 }
 
+void MainWindow::updatedAnimSteps()
+{
+	bool steps_ok;
+	int numsteps = this->e_fsteps->text().toInt(&steps_ok);
+	if (steps_ok) {
+		this->anim_numsteps = numsteps;
+		updatedAnimFps(); // Make sure we start
+	}
+	else {
+		this->anim_numsteps = 0;
+	}
+	anim_dumping=false;
+}
+
+void MainWindow::updatedAnimDump(bool checked)
+{
+	if (!checked) this->anim_dumping = false;
+}
+
+// Only called from animate_timer
 void MainWindow::updateTVal()
 {
-	bool fps_ok;
-	double fps = this->e_fps->text().toDouble(&fps_ok);
-	if (fps_ok) {
-		if (fps <= 0) {
-			actionReloadRenderPreview();
-		} else {
-			double s = this->e_fsteps->text().toDouble();
-			double t = this->e_tval->text().toDouble() + 1/s;
-			QString txt;
-			txt.sprintf("%.5f", t >= 1.0 ? 0.0 : t);
-			this->e_tval->setText(txt);
-		}
+	if (this->anim_numsteps == 0) return;
+
+	if (this->anim_numsteps > 1) {
+		this->anim_step = (this->anim_step + 1) % this->anim_numsteps;
+		this->anim_tval = 1.0 * this->anim_step / this->anim_numsteps;
 	}
+	else if (this->anim_numsteps > 0) {
+		this->anim_step = 0;
+		this->anim_tval = 0.0;
+	}
+	QString txt;
+	txt.sprintf("%.5f", this->anim_tval);
+	this->e_tval->setText(txt);
 }
 
 void MainWindow::refreshDocument()
@@ -1024,8 +1072,10 @@ void MainWindow::instantiateRoot()
 
   // Invalidate renderers before we kill the CSG tree
 	this->qglview->setRenderer(NULL);
+#ifdef ENABLE_OPENCSG
 	delete this->opencsgRenderer;
 	this->opencsgRenderer = NULL;
+#endif
 	delete this->thrownTogetherRenderer;
 	this->thrownTogetherRenderer = NULL;
 
@@ -1033,19 +1083,9 @@ void MainWindow::instantiateRoot()
 	delete this->absolute_root_node;
 	this->absolute_root_node = NULL;
 
-	this->root_raw_term.reset();
-	this->root_norm_term.reset();
-
-	delete this->root_chain;
-	this->root_chain = NULL;
-
-	this->highlight_terms.clear();
-	delete this->highlights_chain;
-	this->highlights_chain = NULL;
-
-	this->background_terms.clear();
-	delete this->background_chain;
-	this->background_chain = NULL;
+	this->csgRoot.reset();
+	this->normalizedRoot.reset();
+	this->root_products.reset();
 
 	this->root_node = NULL;
 	this->tree.setRoot(NULL);
@@ -1100,16 +1140,21 @@ void MainWindow::compileCSG(bool procevents)
 	this->progresswidget = new ProgressWidget(this);
 	connect(this->progresswidget, SIGNAL(requestShow()), this, SLOT(showProgress()));
 
-	progress_report_prep(this->root_node, report_func, this);
-	try {
 #ifdef ENABLE_CGAL
 		GeometryEvaluator geomevaluator(this->tree);
 #else
 		// FIXME: Will we support this?
 #endif
-		CSGTermEvaluator csgrenderer(this->tree, &geomevaluator);
+#ifdef ENABLE_OPENCSG
+		CSGTreeEvaluator csgrenderer(this->tree, &geomevaluator);
+#endif
+
+	progress_report_prep(this->root_node, report_func, this);
+	try {
+#ifdef ENABLE_OPENCSG
 		if (procevents) QApplication::processEvents();
-		this->root_raw_term = csgrenderer.evaluateCSGTerm(*root_node, highlight_terms, background_terms);
+		this->csgRoot = csgrenderer.buildCSGTree(*root_node);
+#endif
 		GeometryCache::instance()->print();
 #ifdef ENABLE_CGAL
 		CGALCache::instance()->print();
@@ -1126,60 +1171,64 @@ void MainWindow::compileCSG(bool procevents)
 	if (procevents) QApplication::processEvents();
 
 	size_t normalizelimit = 2 * Preferences::inst()->getValue("advanced/openCSGLimit").toUInt();
-	CSGTermNormalizer normalizer(normalizelimit);
+	CSGTreeNormalizer normalizer(normalizelimit);
 	
-	if (root_raw_term) {
-		this->root_norm_term = normalizer.normalize(this->root_raw_term);
-		if (this->root_norm_term) {
-			this->root_chain = new CSGChain();
-			this->root_chain->import(this->root_norm_term);
+	if (this->csgRoot) {
+		this->normalizedRoot = normalizer.normalize(this->csgRoot);
+		if (this->normalizedRoot) {
+			this->root_products.reset(new CSGProducts());
+			this->root_products->import(this->normalizedRoot);
 		}
 		else {
-			this->root_chain = NULL;
+			this->root_products.reset();
 			PRINT("WARNING: CSG normalization resulted in an empty tree");
 			if (procevents) QApplication::processEvents();
 		}
 	}
 
+	const std::vector<shared_ptr<CSGNode> > &highlight_terms = csgrenderer.getHighlightNodes();
 	if (highlight_terms.size() > 0) {
 		PRINTB("Compiling highlights (%d CSG Trees)...", highlight_terms.size());
 		if (procevents) QApplication::processEvents();
 		
-		highlights_chain = new CSGChain();
+		highlights_products.reset(new CSGProducts());
 		for (unsigned int i = 0; i < highlight_terms.size(); i++) {
-			highlight_terms[i] = normalizer.normalize(highlight_terms[i]);
-			highlights_chain->import(highlight_terms[i]);
+			shared_ptr<CSGNode> nterm = normalizer.normalize(highlight_terms[i]);
+			highlights_products->import(nterm);
 		}
 	}
 	
+	const std::vector<shared_ptr<CSGNode> > &background_terms = csgrenderer.getBackgroundNodes();
 	if (background_terms.size() > 0) {
 		PRINTB("Compiling background (%d CSG Trees)...", background_terms.size());
 		if (procevents) QApplication::processEvents();
 		
-		background_chain = new CSGChain();
+		background_products.reset(new CSGProducts());
 		for (unsigned int i = 0; i < background_terms.size(); i++) {
-			background_terms[i] = normalizer.normalize(background_terms[i]);
-			background_chain->import(background_terms[i]);
+			shared_ptr<CSGNode> nterm = normalizer.normalize(background_terms[i]);
+			background_products->import(nterm);
 		}
 	}
 
-	if (this->root_chain &&
-			(this->root_chain->objects.size() >
+	if (this->root_products &&
+			(this->root_products->size() >
 			 Preferences::inst()->getValue("advanced/openCSGLimit").toUInt())) {
-		PRINTB("WARNING: Normalized tree has %d elements!", this->root_chain->objects.size());
+		PRINTB("WARNING: Normalized tree has %d elements!", this->root_products->size());
 		PRINT("WARNING: OpenCSG rendering has been disabled.");
 	}
+#ifdef ENABLE_OPENCSG
 	else {
 		PRINTB("Normalized CSG tree has %d elements",
-					 (this->root_chain ? this->root_chain->objects.size() : 0));
-		this->opencsgRenderer = new OpenCSGRenderer(this->root_chain,
-																								this->highlights_chain,
-																								this->background_chain,
+					 (this->root_products ? this->root_products->size() : 0));
+		this->opencsgRenderer = new OpenCSGRenderer(this->root_products,
+																								this->highlights_products,
+																								this->background_products,
 																								this->qglview->shaderinfo);
 	}
-	this->thrownTogetherRenderer = new ThrownTogetherRenderer(this->root_chain,
-																														this->highlights_chain,
-																														this->background_chain);
+#endif
+	this->thrownTogetherRenderer = new ThrownTogetherRenderer(this->root_products,
+																														this->highlights_products,
+																														this->background_products);
 	PRINT("Compile and preview finished.");
 	int s = this->renderingTime.elapsed() / 1000;
 	PRINTB("Total rendering time: %d hours, %d minutes, %d seconds", (s / (60*60)) % ((s / 60) % 60) % (s % 60));
@@ -1321,6 +1370,16 @@ void MainWindow::saveBackup()
 	return writeBackup(this->tempFile);
 }
 
+void MainWindow::saveError(const QIODevice &file, const std::string &msg) {
+	const std::string messageFormat = msg + " %s (%s)";
+	const char *fileName = this->fileName.toLocal8Bit().constData();
+	PRINTB(messageFormat.c_str(), fileName % file.errorString().toLocal8Bit().constData());
+
+	const std::string dialogFormatStr = msg + "\n\"%1\"\n(%2)";
+	const QString dialogFormat(dialogFormatStr.c_str());
+	QMessageBox::warning(this, windowTitle(), dialogFormat.arg(this->fileName).arg(file.errorString()));
+}
+
 /*!
 	Save current document.
 	Should _always_ write to disk, since this is called by SaveAs - i.e. don't try to be
@@ -1330,26 +1389,37 @@ void MainWindow::actionSave()
 {
 	if (this->fileName.isEmpty()) {
 		actionSaveAs();
+		return;
+	}
+
+	setCurrentOutput();
+
+	// If available (>= Qt 5.1), use QSaveFile to ensure the file is not
+	// destroyed if the device is full. Unfortunately this is not working
+	// as advertised (at least in Qt 5.3) as it does not detect the device
+	// full properly and happily commits a 0 byte file.
+	// Checking the QTextStream status flag after flush() seems to catch
+	// this condition.
+	QT_FILE_SAVE_CLASS file(this->fileName);
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+		saveError(file, _("Failed to open file for writing"));
 	}
 	else {
-		setCurrentOutput();
-		QFile file(this->fileName);
-		if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
-			PRINTB("Failed to open file for writing: %s (%s)", 
-			this->fileName.toLocal8Bit().constData() % file.errorString().toLocal8Bit().constData());
-			QMessageBox::warning(this, windowTitle(), tr("Failed to open file for writing:\n %1 (%2)")
-					.arg(this->fileName).arg(file.errorString()));
-		}
-		else {
-			QTextStream writer(&file);
-			writer.setCodec("UTF-8");
-			writer << this->editor->toPlainText();
-			PRINTB("Saved design '%s'.", this->fileName.toLocal8Bit().constData());
+		QTextStream writer(&file);
+		writer.setCodec("UTF-8");
+		writer << this->editor->toPlainText();
+		writer.flush();
+		bool saveOk = writer.status() == QTextStream::Ok;
+		QT_FILE_SAVE_COMMIT;
+		if (saveOk) {
+			PRINTB(_("Saved design '%s'."), this->fileName.toLocal8Bit().constData());
 			this->editor->setContentModified(false);
+		} else {
+			saveError(file, _("Error saving design"));
 		}
-		clearCurrentOutput();
-		updateRecentFiles();
 	}
+	clearCurrentOutput();
+	updateRecentFiles();
 }
 
 void MainWindow::actionSaveAs()
@@ -1517,7 +1587,6 @@ void MainWindow::findBufferChanged() {
 	}
 }
 
-
 bool MainWindow::eventFilter(QObject* obj, QEvent *event)
 {
     if (obj == find_panel)
@@ -1538,18 +1607,18 @@ bool MainWindow::eventFilter(QObject* obj, QEvent *event)
 
 void MainWindow::updateTemporalVariables()
 {
-	this->top_ctx.set_variable("$t", ValuePtr(this->e_tval->text().toDouble()));
+	this->top_ctx.set_variable("$t", ValuePtr(this->anim_tval));
 
 	Value::VectorType vpt;
-	vpt.push_back(Value(-qglview->cam.object_trans.x()));
-	vpt.push_back(Value(-qglview->cam.object_trans.y()));
-	vpt.push_back(Value(-qglview->cam.object_trans.z()));
-	this->top_ctx.set_variable("$vpt", Value(vpt));
+	vpt.push_back(ValuePtr(-qglview->cam.object_trans.x()));
+	vpt.push_back(ValuePtr(-qglview->cam.object_trans.y()));
+	vpt.push_back(ValuePtr(-qglview->cam.object_trans.z()));
+	this->top_ctx.set_variable("$vpt", ValuePtr(vpt));
 
 	Value::VectorType vpr;
-	vpr.push_back(Value(fmodf(360 - qglview->cam.object_rot.x() + 90, 360)));
-	vpr.push_back(Value(fmodf(360 - qglview->cam.object_rot.y(), 360)));
-	vpr.push_back(Value(fmodf(360 - qglview->cam.object_rot.z(), 360)));
+	vpr.push_back(ValuePtr(fmodf(360 - qglview->cam.object_rot.x() + 90, 360)));
+	vpr.push_back(ValuePtr(fmodf(360 - qglview->cam.object_rot.y(), 360)));
+	vpr.push_back(ValuePtr(fmodf(360 - qglview->cam.object_rot.z(), 360)));
 	top_ctx.set_variable("$vpr", ValuePtr(vpr));
 
 	top_ctx.set_variable("$vpd", ValuePtr(qglview->cam.zoomValue()));
@@ -1727,9 +1796,13 @@ void MainWindow::csgReloadRender()
 
 void MainWindow::actionRenderPreview()
 {
+	static bool preview_requested;
+
+	preview_requested=true;
 	if (GuiLocker::isLocked()) return;
 	GuiLocker::lock();
 	autoReloadTimer->stop();
+	preview_requested=false;
 	setCurrentOutput();
 
 	PRINT("Parsing design (AST generation)...");
@@ -1737,6 +1810,12 @@ void MainWindow::actionRenderPreview()
 	this->afterCompileSlot = "csgRender";
 	this->procevents = !viewActionAnimate->isChecked();
 	compile(false);
+	if (preview_requested) {
+		// if the action was called when the gui was locked, we must request it one more time
+		// however, it's not possible to call it directly NOR make the loop
+		// it must be called from the mainloop
+		QTimer::singleShot(0, this, SLOT(actionRenderPreview()));
+	}
 }
 
 void MainWindow::csgRender()
@@ -1755,15 +1834,22 @@ void MainWindow::csgRender()
 #endif
 	}
 
-	if (viewActionAnimate->isChecked() && e_dump->isChecked()) {
-		// Force reading from front buffer. Some configurations will read from the back buffer here.
-		glReadBuffer(GL_FRONT);
-		QImage img = this->qglview->grabFrameBuffer();
-		QString filename;
-		double s = this->e_fsteps->text().toDouble();
-		double t = this->e_tval->text().toDouble();
-		filename.sprintf("frame%05d.png", int(round(s*t)));
-		img.save(filename, "PNG");
+	if (e_dump->isChecked() && animate_timer->isActive()) {
+		if (anim_dumping && anim_dump_start_step == anim_step) {
+			anim_dumping=false;
+			e_dump->setChecked(false);
+		} else {
+			if (!anim_dumping) {
+				anim_dumping = true;
+				anim_dump_start_step = anim_step;
+			}
+			// Force reading from front buffer. Some configurations will read from the back buffer here.
+			glReadBuffer(GL_FRONT);
+			QImage img = this->qglview->grabFrameBuffer();
+			QString filename;
+			filename.sprintf("frame%05d.png", this->anim_step);
+			img.save(filename, "PNG");
+		}
 	}
 
 	compileEnded();
@@ -1947,11 +2033,11 @@ void MainWindow::actionDisplayCSGProducts()
 	e->setReadOnly(true);
 	e->setPlainText(QString("\nCSG before normalization:\n%1\n\n\nCSG after normalization:\n%2\n\n\nCSG rendering chain:\n%3\n\n\nHighlights CSG rendering chain:\n%4\n\n\nBackground CSG rendering chain:\n%5\n")
 									
-	.arg(root_raw_term ? QString::fromUtf8(root_raw_term->dump().c_str()) : "N/A",
-	root_norm_term ? QString::fromUtf8(root_norm_term->dump().c_str()) : "N/A",
-	this->root_chain ? QString::fromUtf8(this->root_chain->dump().c_str()) : "N/A",
-	highlights_chain ? QString::fromUtf8(highlights_chain->dump().c_str()) : "N/A",
-	background_chain ? QString::fromUtf8(background_chain->dump().c_str()) : "N/A"));
+	.arg(this->csgRoot ? QString::fromUtf8(this->csgRoot->dump().c_str()) : "N/A",
+	this->normalizedRoot ? QString::fromUtf8(this->normalizedRoot->dump().c_str()) : "N/A",
+	this->root_products ? QString::fromUtf8(this->root_products->dump().c_str()) : "N/A",
+	this->highlights_products ? QString::fromUtf8(this->highlights_products->dump().c_str()) : "N/A",
+	this->background_products ? QString::fromUtf8(this->background_products->dump().c_str()) : "N/A"));
 	
 	e->show();
 	e->resize(600, 400);
@@ -2053,8 +2139,9 @@ void MainWindow::actionExport(export_type_e, QString, QString)
 		assert(false && "Unknown export type");
 		break;
 	}
-	exportFileByName(this->root_geom.get(), format, export_filename.toUtf8(),
-		export_filename.toLocal8Bit().constData());
+	exportFileByName(this->root_geom, format,
+		export_filename.toLocal8Bit().constData(),
+		export_filename.toUtf8());
 	PRINTB("%s export finished.", type_name);
 
 	clearCurrentOutput();
@@ -2113,7 +2200,7 @@ void MainWindow::actionExportDXF()
 	if (dxf_filename.isEmpty()) {
 		return;
 	}
-	exportFileByName(this->root_geom.get(), OPENSCAD_DXF, dxf_filename.toUtf8(),
+	exportFileByName(this->root_geom, OPENSCAD_DXF, dxf_filename.toUtf8(),
 		dxf_filename.toLocal8Bit().constData());
 	PRINT("DXF export finished.");
 
@@ -2127,7 +2214,7 @@ void MainWindow::actionExportSVG()
 	if (svg_filename.isEmpty()) {
 		return;
 	}
-	exportFileByName(this->root_geom.get(), OPENSCAD_SVG, svg_filename.toUtf8(),
+	exportFileByName(this->root_geom, OPENSCAD_SVG, svg_filename.toUtf8(),
 		svg_filename.toLocal8Bit().constData());
 	PRINT("SVG export finished.");
 
@@ -2182,6 +2269,13 @@ void MainWindow::actionExportImage()
 	}
 	clearCurrentOutput();
 	return;
+}
+
+void MainWindow::actionCopyViewport()
+{
+	const QImage & image = qglview->grabFrame();
+	QClipboard *clipboard = QApplication::clipboard();
+	clipboard->setImage(image);
 }
 
 void MainWindow::actionFlushCaches()
@@ -2299,7 +2393,7 @@ void MainWindow::viewModeAnimate()
 	if (viewActionAnimate->isChecked()) {
 		animate_panel->show();
 		actionRenderPreview();
-		updatedFps();
+		updatedAnimFps();
 	} else {
 		animate_panel->hide();
 		animate_timer->stop();

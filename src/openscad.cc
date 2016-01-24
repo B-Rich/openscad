@@ -42,6 +42,8 @@
 #include "stackcheck.h"
 #include "CocoaUtils.h"
 #include "FontCache.h"
+#include "OffscreenView.h"
+#include "GeometryEvaluator.h"
 
 #include <string>
 #include <vector>
@@ -52,9 +54,8 @@
 #include "cgalutils.h"
 #endif
 
-#include "csgterm.h"
-#include "CSGTermEvaluator.h"
-#include "CsgInfo.h"
+#include "csgnode.h"
+#include "CSGTreeEvaluator.h"
 
 #include <sstream>
 
@@ -169,15 +170,13 @@ static void info()
 {
 	std::cout << LibraryInfo::info() << "\n\n";
 
-	CsgInfo csgInfo = CsgInfo();
 	try {
-		csgInfo.glview = new OffscreenView(512,512);
+		OffscreenView glview(512,512);
+		std::cout << glview.getRendererInfo() << "\n";
 	} catch (int error) {
 		PRINTB("Can't create OpenGL OffscreenView. Code: %i. Exiting.\n", error);
 		exit(1);
 	}
-
-	std::cout << csgInfo.glview->getRendererInfo() << "\n";
 
 	exit(0);
 }
@@ -272,12 +271,10 @@ Camera get_camera(po::variables_map vm)
 	return camera;
 }
 
-#ifdef OPENSCAD_TESTING
-#undef OPENSCAD_QTGUI
-#else
-#define OPENSCAD_QTGUI 1
+#ifndef OPENSCAD_NOGUI
 #include <QApplication>
 #include <QSettings>
+#define OPENSCAD_QTGUI 1
 #endif
 static bool checkAndExport(shared_ptr<const Geometry> root_geom, unsigned nd,
 	enum FileFormat format, const char *filename)
@@ -290,7 +287,7 @@ static bool checkAndExport(shared_ptr<const Geometry> root_geom, unsigned nd,
 		PRINT("Current top level object is empty.");
 		return false;
 	}
-	exportFileByName(root_geom.get(), format, filename, filename);
+	exportFileByName(root_geom, format, filename, filename);
 	return true;
 }
 
@@ -346,6 +343,8 @@ int cmdline(const char *deps_output_file, const std::string &filename, Camera &c
 	const char *ast_output_file = NULL;
 	const char *term_output_file = NULL;
 	const char *echo_output_file = NULL;
+	const char *nefdbg_output_file = NULL;
+	const char *nef3_output_file = NULL;
 
 	std::string suffix = boosty::extension_str( output_file );
 	boost::algorithm::to_lower( suffix );
@@ -360,6 +359,8 @@ int cmdline(const char *deps_output_file, const std::string &filename, Camera &c
 	else if (suffix == ".ast") ast_output_file = output_file;
 	else if (suffix == ".term") term_output_file = output_file;
 	else if (suffix == ".echo") echo_output_file = output_file;
+	else if (suffix == ".nefdbg") nefdbg_output_file = output_file;
+	else if (suffix == ".nef3") nef3_output_file = output_file;
 	else {
 		PRINTB("Unknown suffix for output file %s\n", output_file);
 		return 1;
@@ -383,7 +384,7 @@ int cmdline(const char *deps_output_file, const std::string &filename, Camera &c
 	AbstractNode *absolute_root_node;
 	shared_ptr<const Geometry> root_geom;
 
-	handle_dep(filename.c_str());
+	handle_dep(filename);
 
 	std::ifstream ifs(filename.c_str());
 	if (!ifs.is_open()) {
@@ -440,11 +441,8 @@ int cmdline(const char *deps_output_file, const std::string &filename, Camera &c
 		}
 	}
 	else if (term_output_file) {
-		std::vector<shared_ptr<CSGTerm> > highlight_terms;
-		std::vector<shared_ptr<CSGTerm> > background_terms;
-
-		CSGTermEvaluator csgRenderer(tree);
-		shared_ptr<CSGTerm> root_raw_term = csgRenderer.evaluateCSGTerm(*root_node, highlight_terms, background_terms);
+		CSGTreeEvaluator csgRenderer(tree);
+		shared_ptr<CSGNode> root_raw_term = csgRenderer.buildCSGTree(*root_node);
 
 		fs::current_path(original_path);
 		std::ofstream fstream(term_output_file);
@@ -466,6 +464,7 @@ int cmdline(const char *deps_output_file, const std::string &filename, Camera &c
 				(renderer==Render::OPENCSG || renderer==Render::THROWNTOGETHER)) {
 			// echo or OpenCSG png -> don't necessarily need geometry evaluation
 		} else {
+			// Force creation of CGAL objects (for testing)
 			root_geom = geomevaluator.evaluateGeometry(*tree.root(), true);
 			if (!root_geom) root_geom.reset(new CGAL_Nef_polyhedron());
 			if (renderer == Render::CGAL && root_geom->getDimension() == 3) {
@@ -541,6 +540,16 @@ int cmdline(const char *deps_output_file, const std::string &filename, Camera &c
 				}
 				fstream.close();
 			}
+		}
+
+		if (nefdbg_output_file) {
+			if (!checkAndExport(root_geom, 3, OPENSCAD_NEFDBG, nefdbg_output_file))
+				return 1;
+		}
+
+		if (nef3_output_file) {
+			if (!checkAndExport(root_geom, 3, OPENSCAD_NEF3, nef3_output_file))
+				return 1;
 		}
 #else
 		PRINT("OpenSCAD has been compiled without CGAL support!\n");
@@ -692,6 +701,9 @@ int gui(vector<string> &inputFiles, const fs::path &original_path, int argc, cha
 	updater->init();
 #endif
 
+#ifndef USE_QOPENGLWIDGET
+	// This workaround appears to only be needed when QGLWidget is used QOpenGLWidget
+	// available in Qt 5.4 is much better.
 	QGLFormat fmt;
 #if 0 /*** disabled by clifford wolf: adds rendering artefacts with OpenCSG ***/
 	// turn on anti-aliasing
@@ -705,6 +717,7 @@ int gui(vector<string> &inputFiles, const fs::path &original_path, int argc, cha
 	// (see https://bugreports.qt-project.org/browse/QTBUG-39370
 	fmt.setSwapInterval(0);
 	QGLFormat::setDefaultFormat(fmt);
+#endif
 
 	set_render_color_scheme(arg_colorscheme, false);
 	
@@ -800,6 +813,7 @@ int main(int argc, char **argv)
 		("projection", po::value<string>(), "(o)rtho or (p)erspective when exporting png")
 		("colorscheme", po::value<string>(), "colorscheme")
 		("debug", po::value<string>(), "special debug info")
+		("quiet,q", "quiet mode (don't print anything *except* errors)")
 		("o,o", po::value<string>(), "out-file")
 		("s,s", po::value<string>(), "stl-file")
 		("x,x", po::value<string>(), "dxf-file")
@@ -834,6 +848,9 @@ int main(int argc, char **argv)
 	if (vm.count("debug")) {
 		OpenSCAD::debug = vm["debug"].as<string>();
 		PRINTB("Debug on. --debug=%s",OpenSCAD::debug);
+	}
+	if (vm.count("quiet")) {
+		OpenSCAD::quiet = true;
 	}
 	if (vm.count("help")) help(argv[0]);
 	if (vm.count("version")) version();
